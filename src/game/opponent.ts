@@ -14,7 +14,12 @@ export class Opponent extends Fighter {
   private seqIndex = 0;
   private saved = 0; // temps de récupération restant pendant un état « touché »
   private idleScale = 1;
-  private riposting = false;
+  private ripostingFlag = false;
+
+  // Contre en cours (suite à un coup dans sa garde) : esquivable, et on ne peut pas le « contrer ».
+  get riposting(): boolean {
+    return this.ripostingFlag;
+  }
 
   constructor() {
     super(O.maxHp);
@@ -27,7 +32,7 @@ export class Opponent extends Fighter {
 
   // Frapper juste avant l'impact = contre (interrompt le coup).
   counterable(windowMs: number): boolean {
-    return this.state === 'telegraph' && this.pattern !== null && this.timer <= windowMs;
+    return this.state === 'telegraph' && this.pattern !== null && !this.ripostingFlag && this.timer <= windowMs;
   }
 
   resetMatch(): void {
@@ -39,7 +44,7 @@ export class Opponent extends Fighter {
   beginRound(round: number): void {
     this.state = 'idle';
     this.pattern = null;
-    this.riposting = false;
+    this.ripostingFlag = false;
     this.idleScale = Math.pow(O.idleScalePerRound, round - 1);
     this.timer = this.nextIdle() + 400;
   }
@@ -65,6 +70,7 @@ export class Opponent extends Fighter {
 
     switch (this.state) {
       case 'idle':
+        this.ripostingFlag = false;
         this.pattern = this.pickPattern();
         this.state = 'telegraph';
         this.timer = this.pattern.telegraphMs;
@@ -76,18 +82,12 @@ export class Opponent extends Fighter {
         events.push({ type: 'impact', pattern: this.pattern! });
         break;
       case 'attack':
-        if (this.riposting) {
-          // riposte : le coup part et il reprend sa garde aussitôt (pas de fenêtre d'ouverture)
-          this.riposting = false;
-          this.state = 'idle';
-          this.pattern = null;
-          this.timer = 480;
-        } else {
-          this.state = 'recovery';
-          this.timer = this.pattern!.recoveryMs;
-        }
+        this.ripostingFlag = false;
+        this.state = 'recovery';
+        this.timer = this.pattern!.recoveryMs;
         break;
       case 'recovery':
+        this.ripostingFlag = false;
         this.state = 'idle';
         this.pattern = null;
         this.timer = this.nextIdle();
@@ -101,11 +101,13 @@ export class Opponent extends Fighter {
   }
 
   // Le joueur a frappé sa garde : il annule ce qu'il préparait et riposte tout de suite.
-  riposte(side: 'left' | 'right'): void {
-    this.pattern = PATTERNS.find((p) => p.kind === 'direct' && p.side === side) ?? PATTERNS[0];
-    this.state = 'attack';
-    this.timer = this.pattern.attackMs;
-    this.riposting = true;
+  // Il bloque, puis contre avec un direct à télégraphie courte : on peut l'esquiver comme n'importe quel direct.
+  riposte(side: 'left' | 'right', damage: number, telegraphMs: number): void {
+    const base = PATTERNS.find((p) => p.kind === 'direct' && p.side === side) ?? PATTERNS[0];
+    this.pattern = { ...base, telegraphMs, recoveryMs: 700, damage };
+    this.state = 'telegraph';
+    this.timer = telegraphMs;
+    this.ripostingFlag = true;
   }
 
   receiveHit(dmg: number): 'blocked' | 'hit' | 'ko' {
@@ -138,6 +140,7 @@ export class Opponent extends Fighter {
 
   // Super uppercut du joueur : touche quel que soit l'état, laisse l'adversaire ouvert longtemps.
   superHit(dmg: number, staggerMs: number): 'hit' | 'ko' {
+    this.ripostingFlag = false;
     this.damage(dmg);
     if (this.hp <= 0) {
       this.state = 'ko';

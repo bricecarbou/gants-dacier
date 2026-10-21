@@ -9,6 +9,13 @@ export const CONFIG = {
     splitY: 0.5, // fraction de la hauteur : au-dessus = tête, en dessous = corps
     debugFlashMs: 400,
     superButton: { x: 180, y: 598, r: 38 }, // bouton du super uppercut (bas, au milieu)
+    // mode « croix » : croix directionnelle à gauche, deux boutons de poing à droite (coordonnées logiques)
+    pad: {
+      dpad: { x: 74, y: 506, rMin: 14, rMax: 66 },
+      punchLeft: { x: 252, y: 530, r: 30 },
+      punchRight: { x: 320, y: 530, r: 30 },
+    },
+    modeButton: { x: 30, y: 520, w: 300, h: 40 }, // bascule du mode de commandes (écran titre)
   },
   player: {
     maxHp: 100,
@@ -17,7 +24,8 @@ export const CONFIG = {
     staminaRegenPerSec: 22,
     staminaRegenDelayMs: 400, // pause de régénération après un coup
     blockedPenalty: 8, // endurance perdue en frappant dans la garde
-    riposteDamage: 14, // l'adversaire bloque puis riposte si on frappe sa garde
+    riposteDamage: 14, // l'adversaire bloque puis contre si on frappe sa garde
+    riposteTelegraphMs: 340, // ... mais son contre se prépare : on peut l'esquiver
     punchCooldownMs: 240,
     punchAnimMs: 170,
     punchDamage: { head: 5, body: 3 },

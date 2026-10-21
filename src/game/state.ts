@@ -96,7 +96,12 @@ export class Game {
     this.impacts.push({ kind, x, y, t: 0, text });
   }
 
+  get controlMode(): 'swipe' | 'pad' {
+    return this.input.mode;
+  }
+
   update(dt: number, actions: Action[]): void {
+    this.input.inMenu = this.phase === 'menu';
     for (const f of this.fx) f.t += dt;
     this.fx = this.fx.filter((f) => f.t < FX_MS);
     for (const i of this.impacts) i.t += dt;
@@ -116,7 +121,10 @@ export class Game {
 
     switch (this.phase) {
       case 'menu':
-        if (actions.length) this.startMatch();
+        if (actions.length) {
+          this.startMatch();
+          this.input.inMenu = false;
+        }
         break;
       case 'intro':
         this.phaseTimer -= dt;
@@ -205,6 +213,7 @@ export class Game {
   }
 
   private handleAction(a: Action): void {
+    if (a === 'confirm') return; // appui hors commandes : utile seulement dans les menus
     const pl = this.player;
     if (a === 'dodgeLeft' || a === 'dodgeRight') {
       pl.tryDodge(a === 'dodgeLeft' ? 'left' : 'right');
@@ -258,7 +267,7 @@ export class Game {
       this.audio.play('block');
       this.impact('block', x, y, 'CLANG');
       this.shake(90, 2);
-      if (o.state === 'idle' || o.state === 'telegraph') this.riposte(hand);
+      if (!o.riposting && (o.state === 'idle' || o.state === 'telegraph')) this.riposte(hand);
       return;
     }
     if (counter) pl.counterT = 0;
@@ -270,17 +279,11 @@ export class Game {
     if (r === 'ko') this.endByKo('ko-win');
   }
 
-  // Frapper la garde : l'adversaire bloque et contre fort.
+  // Frapper la garde : l'adversaire bloque puis contre. Son coup se prépare (télégraphie courte) : on peut l'esquiver.
   private riposte(hand: Side): void {
-    const pl = this.player;
-    this.opponent.riposte(hand);
-    pl.takeHit(P.riposteDamage);
-    this.audio.play('hurt');
-    this.impact('hurt', 180, 540, 'RIPOSTE!');
-    this.shake(260, 7);
-    this.hitStop = H.hurt;
-    this.say(`-${P.riposteDamage}`, 180, 470, '#ff3b4e');
-    if (pl.hp <= 0) this.endByKo('ko-loss');
+    this.opponent.riposte(hand, P.riposteDamage, P.riposteTelegraphMs);
+    this.audio.play('telegraph');
+    this.say('GARDE !', 180, 300, '#ff7b2e');
   }
 
   private landSuper(): void {

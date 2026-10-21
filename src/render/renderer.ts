@@ -87,14 +87,14 @@ export class Renderer {
     drawPix(c, this.back);
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-    c.drawImage(flashOpp ? ov.white : ov.frame, 0, 0);
+    c.drawImage(flashOpp ? ov.white : ov.frame, ov.pose.dx, ov.pose.dy);
 
     if (game.phase !== 'menu') {
       const pv = playerView(game.player, now);
       const flash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
       c.save();
-      c.globalAlpha = flash ? 1 : 0.84;
-      c.drawImage(flash ? pv.white : pv.frame, 0, pv.y);
+      c.globalAlpha = 1;
+      c.drawImage(flash ? pv.white : pv.frame, pv.x, pv.y);
       c.restore();
     }
 
@@ -102,7 +102,7 @@ export class Renderer {
     if (game.phase === 'menu') {
       for (let y = 0; y < LH; y += 2) for (let x = 0; x < LW; x += 2) this.front.set(x, y, P.ink);
     } else {
-      this.frontEffects(this.front, game, ov, sigColor, now);
+      this.frontEffects(this.front, game, ov, sigColor, now, input);
     }
     drawPix(c, this.front);
 
@@ -113,6 +113,7 @@ export class Renderer {
       if (game.phase === 'fight' && game.player.counterT > 0) this.hud.counterHint(c, now);
       if (o.state === 'telegraph' && ov.tp < 0.75) this.alertMark(c, sigColor, ov.tp);
       this.hud.drawFight(c, game, dt);
+      if (game.controlMode === 'pad' && (game.phase === 'fight' || game.phase === 'intro')) this.padLabels(c, input);
       this.hud.floatingTexts(c, game);
       this.hud.overlay(c, game, now);
     }
@@ -131,8 +132,6 @@ export class Renderer {
       }
       pixelText(c, `${this.fps}`, 250, 6, { size: 16, color: '#ffffff' });
     }
-    void input;
-
     this.main.imageSmoothingEnabled = false;
     this.main.drawImage(this.lo, 0, 0, this.canvas.width, this.canvas.height);
   }
@@ -192,7 +191,7 @@ export class Renderer {
     for (let a = a0; a < a1; a += step) p.set(cx + Math.cos(a) * r, cy + Math.sin(a) * r, color);
   }
 
-  private frontEffects(p: Pix, g: Game, ov: ReturnType<typeof oppView>, sigColor: number, now: number): void {
+  private frontEffects(p: Pix, g: Game, ov: ReturnType<typeof oppView>, sigColor: number, now: number, input: Input): void {
     const o = g.opponent;
     const pose = ov.pose;
 
@@ -258,7 +257,10 @@ export class Renderer {
         p.line(CX + Math.cos(a) * r0, 240 + Math.sin(a) * r0, CX + Math.cos(a) * 380, 240 + Math.sin(a) * 380, P.paper);
       }
     }
-    if (g.phase === 'fight' || g.phase === 'intro') this.superButton(p, g, now);
+    if (g.phase === 'fight' || g.phase === 'intro') {
+      this.superButton(p, g, now);
+      if (g.controlMode === 'pad') this.padOverlay(p, input);
+    }
   }
 
   // Étoile à 4 branches (étincelle de coup).
@@ -294,6 +296,45 @@ export class Renderer {
         this.sparkle(p, x + Math.cos(a) * (20 + 90 * k), y + Math.sin(a) * (20 + 90 * k), 11 * pulse, R.burstY);
       }
     }
+  }
+
+  // Croix directionnelle (gauche) et deux boutons de poing (droite), translucides.
+  private padOverlay(p: Pix, input: Input): void {
+    const { dpad, punchLeft, punchRight } = CONFIG.input.pad;
+    const cx = dpad.x * LS;
+    const cy = dpad.y * LS;
+    const R0 = dpad.rMax * LS;
+    this.circle(p, cx, cy, R0, P.steel, 0, Math.PI * 2, 0.02);
+    const arrow = (dir: 'up' | 'down' | 'left' | 'right'): [number, number][] => {
+      const a = 20;
+      const b = 44;
+      const w = 15;
+      return dir === 'up' ? [[cx, cy - b], [cx - w, cy - a], [cx + w, cy - a]] : dir === 'down' ? [[cx, cy + b], [cx - w, cy + a], [cx + w, cy + a]] : dir === 'left' ? [[cx - b, cy], [cx - a, cy - w], [cx - a, cy + w]] : [[cx + b, cy], [cx + a, cy - w], [cx + a, cy + w]];
+    };
+    for (const dir of ['up', 'down', 'left', 'right'] as const) {
+      const on = input.padDir === dir;
+      this.mask.clear();
+      this.mask.poly(arrow(dir), 1);
+      const col = dir === 'up' ? P.cyan : P.steel;
+      for (let y = this.mask.by0; y <= this.mask.by1; y++) for (let x = this.mask.bx0; x <= this.mask.bx1; x++) if (this.mask.get(x, y) && (on || (x + y) % 2 === 0)) p.set(x, y, on ? P.yellow : col);
+    }
+    for (const [b, held] of [[punchLeft, input.btnLeft], [punchRight, input.btnRight]] as const) {
+      const bx = b.x * LS;
+      const by = b.y * LS;
+      const br = b.r * LS;
+      this.circle(p, bx, by, br, held ? P.yellow : P.steel, 0, Math.PI * 2, 0.02);
+      this.circle(p, bx, by, br - 1, held ? P.yellow : P.steel, 0, Math.PI * 2, 0.02);
+      for (let y = Math.floor(by - br + 2); y < by + br - 2; y++) for (let x = Math.floor(bx - br + 2); x < bx + br - 2; x++) if (Math.hypot(x - bx, y - by) < br - 2 && (held || (x + y) % 2 === 0)) p.set(x, y, held ? P.yellow : P.steel);
+    }
+  }
+
+  private padLabels(c: CanvasRenderingContext2D, input: Input): void {
+    const { dpad, punchLeft, punchRight } = CONFIG.input.pad;
+    pixelText(c, 'G', Math.round(punchLeft.x * LS), Math.round(punchLeft.y * LS) - 8, { size: 16, color: input.btnLeft ? '#14101c' : '#ffffff' }, 'center');
+    pixelText(c, 'D', Math.round(punchRight.x * LS), Math.round(punchRight.y * LS) - 8, { size: 16, color: input.btnRight ? '#14101c' : '#ffffff' }, 'center');
+    const head = input.padDir === 'up';
+    pixelText(c, head ? 'VISAGE' : 'CORPS', Math.round(((punchLeft.x + punchRight.x) / 2) * LS), Math.round((punchLeft.y - punchLeft.r - 14) * LS), { size: 8, color: head ? '#7df9ff' : '#ffd23f', outline: null }, 'center');
+    pixelText(c, 'HAUT=VISAGE', Math.round(dpad.x * LS), Math.round((dpad.y - dpad.rMax - 12) * LS), { size: 8, color: '#7df9ff', outline: null }, 'center');
   }
 
   private edgeGlow(p: Pix, w: number, a: number, color: number): void {

@@ -54,7 +54,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   const s: -1 | 1 = p && p.side === 'left' ? -1 : 1;
   const tp = o.state === 'telegraph' && p ? q(clamp01(1 - o.timer / p.telegraphMs), 5) : o.state === 'attack' ? 1 : 0;
   const ap = o.state === 'attack' && p ? q(clamp01(1 - o.timer / p.attackMs), 4) : 0;
-  const f = Math.floor(now / 230) % 4;
+  const t = now / 1000;
 
   let expr: Expr = 'calm';
   if (o.state === 'telegraph') expr = 'angry';
@@ -63,12 +63,14 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   else if (o.state === 'hit') expr = 'hurt';
   else if (o.state === 'ko') expr = 'ko';
 
-  let dx = [-2, 0, 2, 0][f];
-  let dy = [0, 1, 1, 0][f];
-  let hx = 0;
-  let hy = 0;
-  let gl: G = { x: CX - 24, y: 176, r: 14 };
-  let gr: G = { x: CX + 24, y: 176, r: 14 };
+  // garde vivante : léger déplacement latéral lent, rebond sur les appuis, tête qui suit avec retard, gants qui alternent
+  let dx = Math.round(7 * Math.sin(t * 1.25));
+  let dy = Math.round(1.6 * Math.sin(t * 6.0));
+  let hx = -Math.round(dx * 0.35);
+  let hy = dy > 0 ? 1 : 0;
+  const gb = Math.floor(now / 260) % 2;
+  let gl: G = { x: CX - 24, y: 176 + (gb ? 2 : -1), r: 14 };
+  let gr: G = { x: CX + 24, y: 176 + (gb ? -1 : 2), r: 14 };
   let el: [Pt, Pt] = [[CX - 48, 238], [CX + 48, 238]];
   const trail: OppPose['trail'] = [];
   let front: -1 | 0 | 1 = 0;
@@ -362,9 +364,10 @@ function buildOpponent(pose: OppPose): HTMLCanvasElement {
   }
 
   const out = new Pix(LW, OPP_H);
-  out.blit(body, pose.dx, pose.dy);
-  out.blit(head, pose.dx + pose.hx, pose.dy + pose.hy);
-  out.blit(arms, pose.dx, pose.dy);
+  // le décalage global (dx, dy) est appliqué à l'affichage : il ne multiplie pas les images en cache
+  out.blit(body, 0, 0);
+  out.blit(head, pose.hx, pose.hy);
+  out.blit(arms, 0, 0);
   return toCanvas(out);
 }
 
@@ -372,7 +375,10 @@ const oppCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasEl
 
 export function oppView(o: Opponent, now: number): OppView {
   const { pose, tp, ap } = computePose(o, now);
-  const key = JSON.stringify(pose);
+  const { dx: _dx, dy: _dy, ...rest } = pose;
+  void _dx;
+  void _dy;
+  const key = JSON.stringify(rest);
   let e = oppCache.get(key);
   if (!e) {
     if (oppCache.size > 90) oppCache.clear();
@@ -386,7 +392,7 @@ export function oppView(o: Opponent, now: number): OppView {
 /// ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------
 export const PL_Y0 = 90;
 const PL_H = LH - PL_Y0;
-const U = 0.6; // échelle du joueur
+const U = 0.5; // échelle du joueur (petit, comme Mac dans Punch-Out)
 const BASEY = 492; // où tombe l'ancien bas de sprite (512)
 const pm = new Pix(LW, PL_H);
 
@@ -399,6 +405,7 @@ function plPart(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => v
 
 interface PlPose {
   ox: number;
+  lean: -1 | 0 | 1; // penché pendant une esquive latérale
   hand: 'left' | 'right' | '';
   target: 'head' | 'body' | '';
   k: number;
@@ -433,7 +440,7 @@ function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): voi
 function buildPlayer(pose: PlPose): HTMLCanvasElement {
   const out = new Pix(LW, PL_H);
   const cx = CX + pose.ox;
-  const hx = Math.round(pose.ox * 0.2);
+  const hx = pose.lean * 3;
   const X = (n: number) => cx + n * U;
   const XH = (n: number) => cx + hx + n * U;
   const Y = (old: number) => BASEY + (old - 512) * U - PL_Y0;
@@ -484,18 +491,18 @@ function buildPlayer(pose: PlPose): HTMLCanvasElement {
   const SHP: Record<'left' | 'right', Pt> = { left: [X(-64), Y(478)], right: [X(64), Y(478)] };
   for (const hand of ['left', 'right'] as const) {
     const s = hand === 'left' ? -1 : 1;
-    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 2), r: 15 };
+    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 3), r: 12 };
     const e: Pt = [X(s * 80), Y(446)];
     let g: G = { ...guard };
     if (pose.sup >= 0 && hand === 'right') {
-      const low: G = { x: X(26), y: Y(470), r: 15 };
-      const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 34 };
+      const low: G = { x: X(26), y: Y(470), r: 12 };
+      const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 28 };
       g = lerpG(low, top, pose.sup);
       for (const d of [0.25, 0.5]) plGlove(out, lerpG(low, top, Math.max(0, pose.sup - d)), e, -1, true);
     } else if (pose.hand === hand) {
       const tx = hand === 'left' ? CX - 12 : CX + 12;
       const ty = (pose.target === 'head' ? 150 : 250) - PL_Y0;
-      const dest: G = { x: tx + pose.ox * 0.3, y: ty, r: 10 };
+      const dest: G = { x: tx, y: ty, r: 8 };
       g = lerpG(guard, dest, pose.k);
       for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, dest, Math.max(0, pose.k - d)), e, s === -1 ? 1 : -1, true);
     }
@@ -510,12 +517,13 @@ function buildPlayer(pose: PlPose): HTMLCanvasElement {
 
 const plCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasElement }>();
 
-export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement; white: HTMLCanvasElement; y: number } {
+export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement; white: HTMLCanvasElement; x: number; y: number } {
   const a = pl.punchAnim;
   const kRaw = a ? Math.sin(clamp01(a.t / CONFIG.player.punchAnimMs) * Math.PI) : 0;
   const sa = pl.superAnim;
   const pose: PlPose = {
-    ox: Math.round(pl.dodgeOffset / 1.25 / 4) * 4,
+    ox: 0,
+    lean: pl.dodgeOffset < -8 ? -1 : pl.dodgeOffset > 8 ? 1 : 0,
     hand: a ? a.hand : '',
     target: a ? a.target : '',
     k: q(kRaw, 4),
@@ -531,5 +539,6 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     plCache.set(key, e);
   }
   const hurt = pl.stun > 0 ? Math.round(6 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
-  return { ...e, y: PL_Y0 + hurt + Math.round(12 * pl.backAmount) };
+  const sway = Math.round(2 * Math.sin(now / 480)); // léger balancement de garde
+  return { ...e, x: Math.round(pl.dodgeOffset * 0.8) + sway, y: PL_Y0 + hurt + Math.round(10 * pl.backAmount) };
 }

@@ -192,11 +192,21 @@ export class Hud {
     pixelText(c, "D'ACIER", MID, 128, { size: 40, color: '#d4def5', outline: INK, shadow: '#243a7a' }, 'center');
     pixelText(c, 'COMBAT À PATTERNS', MID, 182, { size: 16, color: '#c9d1e6' }, 'center');
 
-    box(c, 20, 358, 248, 70, '#140e28');
-    pixelText(c, 'SWIPE G/D: ESQUIVE', MID, 366, { size: 16, color: '#7df9ff', outline: null }, 'center');
-    pixelText(c, 'SWIPE BAS: RECUL', MID, 386, { size: 16, color: '#7df9ff', outline: null }, 'center');
-    pixelText(c, 'TAP: FRAPPER', MID, 406, { size: 16, color: '#ffd23f', outline: null }, 'center');
-    if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 452, { size: 16, color: '#ffffff' }, 'center');
-    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 488, { size: 16, color: '#8d88a8', outline: null }, 'center');
+    const pad = g.controlMode === 'pad';
+    box(c, 20, 322, 248, 66, '#140e28');
+    const lines = pad ? ['CROIX: ESQUIVE', 'POING: CORPS', 'HAUT+POING: TETE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: RECUL', 'TAP: FRAPPER'];
+    const cols = pad ? ['#7df9ff', '#ffd23f', '#ffd23f'] : ['#7df9ff', '#7df9ff', '#ffd23f'];
+    lines.forEach((t, i) => pixelText(c, t, MID, 329 + i * 19, { size: 16, color: cols[i], outline: null }, 'center'));
+    // bouton de choix du mode de commandes
+    const mb = CONFIG.input.modeButton;
+    const bx = Math.round(mb.x * LS);
+    const by = Math.round(mb.y * LS);
+    box(c, bx, by, Math.round(mb.w * LS), Math.round(mb.h * LS), '#2a1a55');
+    c.fillStyle = '#7a5cff';
+    c.fillRect(bx, by, Math.round(mb.w * LS), 3);
+    pixelText(c, pad ? 'MODE: CROIX' : 'MODE: SWIPE', MID, by + 9, { size: 16, color: '#ffffff', outline: null }, 'center');
+    pixelText(c, 'TOUCHE POUR CHANGER', MID, by + Math.round(mb.h * LS) + 8, { size: 8, color: '#8d88a8', outline: null }, 'center');
+    if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 470, { size: 16, color: '#ffffff' }, 'center');
+    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 496, { size: 16, color: '#8d88a8', outline: null }, 'center');
   }
 }

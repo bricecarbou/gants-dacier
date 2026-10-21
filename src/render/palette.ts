@@ -1,6 +1,6 @@
-import { col, ramp } from './pixel';
+import { col, ramp, rampV } from './pixel';
 
-// Palette unique du jeu (style 16 bits : peu de teintes, rampes de 4 tons).
+// Palette unique du jeu (style 16 bits : peu de teintes, rampes de 4 à 6 tons).
 export const P = {
   ink: col('#14101c'),
   white: col('#ffffff'),
@@ -16,22 +16,22 @@ export const P = {
   sweat: col('#bfeaff'),
   scar: col('#a8343c'),
   skinDeep: col('#84402a'),
+  iris: col('#6a3a1c'),
   grey: col('#9aa0b5'),
   steel: col('#b9c7e6'),
 };
 
 export const R = {
-  skin: ramp('#3b1a18', '#b0603a', '#dc9266', '#f8cfa0'),
-  skinBack: ramp('#0e2a4a', '#9a5632', '#cf8658', '#f3c08c'),
-  gloveRed: ramp('#3a0710', '#8e1226', '#d8283a', '#ff8a8a'),
-  gloveBlue: ramp('#0a1740', '#173f9a', '#2f7be0', '#9ae0ff'),
-  cuff: ramp('#2b2438', '#a8a2b8', '#ece6d6', '#ffffff'),
-  shorts: ramp('#3a0710', '#7a1020', '#c1121f', '#f0505c'),
-  trunksBlue: ramp('#0a1740', '#14327a', '#1f56c0', '#5aa0f0'),
-  hair: ramp('#07060d', '#0f0f1c', '#1c1c33', '#4a62d0'),
-  hairBack: ramp('#07101c', '#121a2c', '#1c2840', '#59e8ff'),
-  shoe: ramp('#07060d', '#161626', '#2b2b48', '#5a5a86'),
-  goldR: ramp('#4a2c08', '#b8760e', '#f2b628', '#ffe98a'),
+  skin: rampV('#3b1a18', '#7a3a26', '#b0603a', '#dc9266', '#f2b88a', '#ffe2c0'),
+  skinBack: rampV('#0e2a4a', '#6e3a2c', '#9a5632', '#cf8658', '#f0b886', '#ffe0b8'),
+  gloveRed: rampV('#3a0710', '#6a0e20', '#a8182c', '#dc2a3c', '#ff6a6a', '#ffd6d6'),
+  gloveBlue: rampV('#0a1740', '#12307a', '#1d52c0', '#2f7be0', '#78c4ff', '#d8f4ff'),
+  cuff: rampV('#2b2438', '#7a748a', '#b0aabd', '#ece6d6', '#ffffff', '#ffffff'),
+  shorts: rampV('#3a0710', '#5e0c1a', '#8e1226', '#c1121f', '#f0505c', '#ffb0b8'),
+  hair: rampV('#07060d', '#0c0c16', '#14142a', '#1c1c33', '#4a62d0', '#9ab4ff'),
+  hairBack: rampV('#07101c', '#0e1626', '#16233a', '#1c2c48', '#3b92b8', '#7af0ff'),
+  shoe: rampV('#07060d', '#0e0e1a', '#1a1a2e', '#2b2b48', '#5a5a86', '#a0a0d0'),
+  goldR: rampV('#4a2c08', '#8a5410', '#b8760e', '#f2b628', '#ffe070', '#fffbe0'),
   burstY: ramp('#5a2a00', '#ffb000', '#ffe14d', '#ffffff'),
   burstC: ramp('#0a2a4a', '#2fb4d0', '#7df9ff', '#ffffff'),
   burstR: ramp('#3a0710', '#c01830', '#ff3b4e', '#ffb0b8'),

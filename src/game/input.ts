@@ -3,6 +3,8 @@ import { CONFIG } from '../config';
 export type Action =
   | 'dodgeLeft'
   | 'dodgeRight'
+  | 'dodgeBack'
+  | 'super'
   | 'punchLeftHead'
   | 'punchLeftBody'
   | 'punchRightHead'
@@ -11,6 +13,8 @@ export type Action =
 const KEY_MAP: Record<string, Action> = {
   ArrowLeft: 'dodgeLeft',
   ArrowRight: 'dodgeRight',
+  ArrowDown: 'dodgeBack',
+  Space: 'super',
   KeyW: 'punchLeftHead',
   KeyS: 'punchLeftBody',
   KeyI: 'punchRightHead',
@@ -50,10 +54,17 @@ export class Input {
     canvas.addEventListener('pointermove', (e) => {
       const g = this.gestures.get(e.pointerId);
       if (!g || g.done) return;
-      const dx = toLogical(e).x - g.x0;
-      if (Math.abs(dx) >= CONFIG.input.swipeMinDist && performance.now() - g.t0 <= CONFIG.input.swipeMaxMs) {
+      const p = toLogical(e);
+      const dx = p.x - g.x0;
+      const dy = p.y - g.y0;
+      if (performance.now() - g.t0 > CONFIG.input.swipeMaxMs) return;
+      const min = CONFIG.input.swipeMinDist;
+      if (Math.abs(dx) >= min && Math.abs(dx) > Math.abs(dy) * 0.8) {
         g.done = true;
         this.push(dx < 0 ? 'dodgeLeft' : 'dodgeRight');
+      } else if (dy >= min && dy > Math.abs(dx) * 1.2) {
+        g.done = true; // swipe vers le bas : recul
+        this.push('dodgeBack');
       }
     });
 
@@ -64,6 +75,11 @@ export class Input {
       const p = toLogical(e);
       const moved = Math.hypot(p.x - g.x0, p.y - g.y0);
       if (moved > CONFIG.input.tapMaxDist || performance.now() - g.t0 > CONFIG.input.swipeMaxMs) return;
+      const b = CONFIG.input.superButton;
+      if (Math.hypot(g.x0 - b.x, g.y0 - b.y) <= b.r) {
+        this.push('super');
+        return;
+      }
       const left = g.x0 < width / 2;
       const head = g.y0 < height * CONFIG.input.splitY;
       this.push(left ? (head ? 'punchLeftHead' : 'punchLeftBody') : head ? 'punchRightHead' : 'punchRightBody');
@@ -91,7 +107,7 @@ export class Input {
     this.lastActionAt = performance.now();
   }
 
-  // Retourne et vide les actions reçues depuis le dernier appel.
+  // Retourne et vide les actions reçues depuis le dernier appui.
   drain(): Action[] {
     const q = this.queue;
     this.queue = [];

@@ -1,8 +1,9 @@
 // Mini moteur de pixel art : palette indexée, primitives sans anticrénelage,
-// et « peinture » automatique d'une pièce (contour + ombrage à plat éclairé en haut à gauche).
+// et « peinture » automatique d'une pièce (contour + ombrage éclairé en haut à gauche).
 
-export const LW = 180; // résolution interne (pixels) ; la logique de jeu reste en 360x640 (x2)
-export const LH = 320;
+export const LW = 288; // résolution interne (pixels) ; la logique de jeu reste en 360x640
+export const LH = 512;
+export const LS = LW / 360; // logique -> pixels internes
 
 export const PAL: string[] = ['#000000'];
 const RGB: number[] = [0, 0, 0];
@@ -21,6 +22,20 @@ export interface Ramp {
   hi: number; // lumière
 }
 export const ramp = (ol: string, sh: string, base: string, hi: string): Ramp => ({ ol: col(ol), sh: col(sh), base: col(base), hi: col(hi) });
+
+// Rampe à 6 tons pour l'ombrage volumétrique.
+export interface RampV extends Ramp {
+  deep: number;
+  spec: number;
+}
+export const rampV = (ol: string, deep: string, sh: string, base: string, hi: string, spec: string): RampV => ({
+  ol: col(ol),
+  deep: col(deep),
+  sh: col(sh),
+  base: col(base),
+  hi: col(hi),
+  spec: col(spec),
+});
 
 export class Pix {
   d: Uint8Array;
@@ -104,8 +119,8 @@ export class Pix {
   }
 
   blit(src: Pix, dx: number, dy: number): void {
-    for (let y = 0; y < src.h; y++) {
-      for (let x = 0; x < src.w; x++) {
+    for (let y = src.by0; y <= src.by1; y++) {
+      for (let x = src.bx0; x <= src.bx1; x++) {
         const v = src.d[y * src.w + x];
         if (v) this.set(x + dx, y + dy, v);
       }
@@ -113,7 +128,10 @@ export class Pix {
   }
 }
 
-// Peint la pièce dessinée dans `mask` sur `dst` : contour sombre + ombrage à plat.
+const BAYER = [0.125, 0.625, 0.875, 0.375];
+const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
+
+// Peinture « à plat » : contour sombre + liseré lumineux/ombré sur les bords (effets, décors).
 export function paint(dst: Pix, mask: Pix, r: Ramp, outline = true): void {
   const x0 = Math.max(0, mask.bx0 - 1);
   const x1 = Math.min(mask.w - 1, mask.bx1 + 1);
@@ -130,15 +148,75 @@ export function paint(dst: Pix, mask: Pix, r: Ramp, outline = true): void {
     }
   }
   if (!outline) return;
+  outlinePass(dst, mask, r.ol, x0, x1, y0, y1);
+}
+
+function outlinePass(dst: Pix, mask: Pix, ol: number, x0: number, x1: number, y0: number, y1: number): void {
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       if (mask.get(x, y)) continue;
-      if (mask.get(x - 1, y) || mask.get(x + 1, y) || mask.get(x, y - 1) || mask.get(x, y + 1)) dst.set(x, y, r.ol);
+      if (mask.get(x - 1, y) || mask.get(x + 1, y) || mask.get(x, y - 1) || mask.get(x, y + 1)) dst.set(x, y, ol);
     }
   }
 }
 
-// Détail dessiné seulement là où la pièce existe (lignes d'anatomie, reflets…).
+// Peinture volumétrique : on déduit un relief arrondi de la forme (distance au bord), puis on éclaire
+// depuis le haut à gauche. Les bandes de ton sont tramées entre elles, comme sur un jeu 16 bits soigné.
+const LIGHT = (() => {
+  const l: [number, number, number] = [-0.5, -0.72, 0.52];
+  const n = Math.hypot(...l);
+  return l.map((v) => v / n) as [number, number, number];
+})();
+
+export function paintVol(dst: Pix, mask: Pix, r: RampV, opts: { outline?: boolean; radius?: number; side?: number } = {}): void {
+  const radius = opts.radius ?? 6;
+  const sideShade = opts.side ?? 0.16;
+  const x0 = Math.max(0, mask.bx0 - 2);
+  const x1 = Math.min(mask.w - 1, mask.bx1 + 2);
+  const y0 = Math.max(0, mask.by0 - 2);
+  const y1 = Math.min(mask.h - 1, mask.by1 + 2);
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const dist = new Float32Array(w * h);
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : dist[y * w + x]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) dist[y * w + x] = mask.get(x + x0, y + y0) ? 1e6 : 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!dist[i]) continue;
+      dist[i] = Math.min(dist[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + 1.4, at(x + 1, y - 1) + 1.4);
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      if (!dist[i]) continue;
+      dist[i] = Math.min(dist[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + 1.4, at(x - 1, y + 1) + 1.4);
+    }
+  }
+  const hgt = new Float32Array(w * h);
+  for (let i = 0; i < hgt.length; i++) {
+    const t = Math.min(dist[i], radius);
+    const k = 1 - t / radius;
+    hgt[i] = radius * Math.sqrt(Math.max(0, 1 - k * k));
+  }
+  const hv = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : hgt[y * w + x]);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!dist[y * w + x]) continue;
+      const gx = (hv(x + 1, y) - hv(x - 1, y)) / 2;
+      const gy = (hv(x, y + 1) - hv(x, y - 1)) / 2;
+      const len = Math.hypot(gx, gy, 1);
+      const dot = (-gx * LIGHT[0] - gy * LIGHT[1] + LIGHT[2]) / len;
+      let v = dot + 0.06 + sideShade * (0.5 - (x + 0.5) / w);
+      v += (bayer(x + x0, y + y0) - 0.5) * 0.11;
+      const tone = v < 0.3 ? r.deep : v < 0.46 ? r.sh : v < 0.74 ? r.base : v < 0.9 ? r.hi : r.spec;
+      dst.set(x + x0, y + y0, tone);
+    }
+  }
+  if (opts.outline !== false) outlinePass(dst, mask, r.ol, x0, x1, y0, y1);
+}
+
 const scratch = new Map<string, Pix>();
 
 // Détail dessiné seulement là où la pièce existe (lignes d'anatomie, reflets…).

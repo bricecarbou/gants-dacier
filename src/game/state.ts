@@ -1,10 +1,10 @@
 import { CONFIG } from '../config';
 import type { Audio } from '../audio/audio';
-import { dodgeCovers } from './collision';
+import { dodgeWorks, type Side } from './collision';
 import type { Action, Input } from './input';
 import { Opponent } from './opponent';
+import type { Pattern } from './patterns';
 import { Player, type Target } from './player';
-import type { Side } from './collision';
 
 export type Phase = 'menu' | 'intro' | 'fight' | 'koPause' | 'break' | 'result';
 export type Outcome = 'ko-win' | 'ko-loss' | 'points-win' | 'points-loss' | 'draw';
@@ -22,7 +22,7 @@ export interface Impact {
   x: number;
   y: number;
   t: number;
-  kind: 'hit' | 'counter' | 'block' | 'hurt';
+  kind: 'hit' | 'counter' | 'block' | 'hurt' | 'super';
   text: string;
 }
 
@@ -35,6 +35,7 @@ export interface MatchRecord {
 export const RESULT_BUTTON = { x: 100, y: 430, w: 160, h: 52 };
 const F = CONFIG.fight;
 const P = CONFIG.player;
+const S = CONFIG.super;
 const FX_MS = 900;
 const IMPACT_MS = 480;
 const HIT_WORDS = ['WHAM!', 'BAM!', 'CLAC!', 'POW!'];
@@ -142,7 +143,7 @@ export class Game {
   private startMatch(): void {
     this.round = 1;
     this.outcome = null;
-    this.player.hp = this.player.maxHp;
+    this.player.resetMatch();
     this.opponent.resetMatch();
     this.startRound(false);
   }
@@ -161,17 +162,31 @@ export class Game {
   }
 
   private updateFight(dt: number, actions: Action[]): void {
-    this.player.tick(dt);
+    const pl = this.player;
+    pl.tick(dt);
     for (const a of actions) this.handleAction(a);
+
+    // le super uppercut touche à la fin de son armé, sauf si le joueur a été touché entre-temps
+    if (pl.superAnim && !pl.superAnim.hit && pl.superAnim.t >= S.windupMs) {
+      pl.superAnim.hit = true;
+      this.landSuper();
+    }
 
     for (const e of this.opponent.update(dt)) {
       if (e.type === 'telegraph') this.audio.play('telegraph');
-      else this.resolveImpact(e.pattern.damage, e.pattern.dodge);
+      else this.resolveImpact(e.pattern);
     }
     if (this.phase !== 'fight') return;
 
     this.roundTimer -= dt;
     if (this.roundTimer <= 0) this.endRound();
+  }
+
+  private gainMeter(n: number): void {
+    if (this.player.addMeter(n)) {
+      this.audio.play('super');
+      this.say('SUPER PRÊT !', 180, 520, '#ffe14d');
+    }
   }
 
   private handleAction(a: Action): void {
@@ -180,6 +195,16 @@ export class Game {
       pl.tryDodge(a === 'dodgeLeft' ? 'left' : 'right');
       return;
     }
+    if (a === 'dodgeBack') {
+      pl.tryDodge('back');
+      return;
+    }
+    if (a === 'super') {
+      if (pl.trySuper()) this.audio.play('punch');
+      else this.audio.play('empty');
+      return;
+    }
+
     const hand: Side = a.includes('Left') ? 'left' : 'right';
     const target: Target = a.endsWith('Head') ? 'head' : 'body';
     const res = pl.tryPunch(hand, target);
@@ -191,12 +216,27 @@ export class Game {
     if (res !== 'ok') return;
     this.audio.play('punch');
 
-    const counter = pl.counterT > 0;
-    const base = P.punchDamage[target] * (counter ? P.counterMultiplier : 1);
-    const dmg = Math.round(base);
-    const r = this.opponent.receiveHit(dmg);
+    const o = this.opponent;
     const x = hand === 'left' ? 160 : 200;
-    const y = target === 'head' ? 200 : 320;
+    const y = target === 'head' ? 190 : 310;
+
+    // CONTRE : frapper juste avant l'impact interrompt le coup de l'adversaire
+    if (o.counterable(P.counterPunchWindowMs)) {
+      const upper = o.pattern!.kind === 'uppercut';
+      const dmg = Math.round(P.punchDamage[target] * P.counterPunchMultiplier);
+      const r = o.counterHit(dmg);
+      this.audio.play('hit');
+      this.impact('counter', x, y, upper ? 'PARADE !' : 'CONTRE !');
+      this.shake(240, 8);
+      this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, '#7df9ff');
+      this.gainMeter(upper ? S.uppercutCounterGain : S.counterGain);
+      if (r === 'ko') this.endByKo('ko-win');
+      return;
+    }
+
+    const counter = pl.counterT > 0;
+    const dmg = Math.round(P.punchDamage[target] * (counter ? P.counterMultiplier : 1));
+    const r = o.receiveHit(dmg);
     if (r === 'blocked') {
       pl.stamina = Math.max(0, pl.stamina - P.blockedPenalty);
       this.audio.play('block');
@@ -212,19 +252,32 @@ export class Game {
     if (r === 'ko') this.endByKo('ko-win');
   }
 
-  private resolveImpact(damage: number, required: Parameters<typeof dodgeCovers>[1]): void {
+  private landSuper(): void {
+    const r = this.opponent.superHit(S.damage, S.staggerMs);
+    this.audio.play('ko');
+    this.impact('super', 180, 230, 'SUPER !');
+    this.shake(420, 14);
+    this.flashT = 220;
+    this.say(`-${S.damage}`, 220, 160, '#ffe14d');
+    if (r === 'ko') this.endByKo('ko-win');
+  }
+
+  private resolveImpact(p: Pattern): void {
     const pl = this.player;
-    if (dodgeCovers(pl.dodging, required)) {
-      pl.counterT = P.counterWindowMs;
+    const dir = pl.dodging;
+    if (dodgeWorks(dir, p)) {
+      const back = dir === 'back';
+      pl.counterT = back ? P.backCounterWindowMs : P.counterWindowMs;
       this.audio.play('dodge');
-      this.say('ESQUIVE !', 180 + pl.dodgeOffset, 500, '#7df9ff');
+      this.say(back ? 'RECUL !' : 'ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 500, '#7df9ff');
+      this.gainMeter(back ? S.backGain : S.dodgeGain);
       return;
     }
-    pl.takeHit(damage);
+    pl.takeHit(p.damage);
     this.audio.play('hurt');
     this.impact('hurt', 180, 470, 'BOOM!');
     this.shake(300, 10);
-    this.say(`-${damage}`, 180, 420, '#ff3b4e');
+    this.say(`-${p.damage}`, 180, 420, '#ff3b4e');
     if (pl.hp <= 0) this.endByKo('ko-loss');
   }
 

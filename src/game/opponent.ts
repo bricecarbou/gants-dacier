@@ -24,6 +24,11 @@ export class Opponent extends Fighter {
     return this.state === 'recovery' || this.state === 'hit';
   }
 
+  // Frapper juste avant l'impact = contre (interrompt le coup).
+  counterable(windowMs: number): boolean {
+    return this.state === 'telegraph' && this.pattern !== null && this.timer <= windowMs;
+  }
+
   resetMatch(): void {
     this.hp = this.maxHp;
     this.seqIndex = 0;
@@ -97,6 +102,32 @@ export class Opponent extends Fighter {
       this.state = 'hit';
     }
     this.timer = O.hitStunMs;
+    return 'hit';
+  }
+
+  // Contre : le coup en préparation est annulé, l'adversaire est sonné puis récupère.
+  counterHit(dmg: number): 'counter' | 'ko' {
+    this.damage(dmg);
+    if (this.hp <= 0) {
+      this.state = 'ko';
+      return 'ko';
+    }
+    this.saved = (this.pattern?.recoveryMs ?? 800) * 0.9;
+    this.state = 'hit';
+    this.timer = O.hitStunMs + 140;
+    return 'counter';
+  }
+
+  // Super uppercut du joueur : touche quel que soit l'état, laisse l'adversaire ouvert longtemps.
+  superHit(dmg: number, staggerMs: number): 'hit' | 'ko' {
+    this.damage(dmg);
+    if (this.hp <= 0) {
+      this.state = 'ko';
+      return 'ko';
+    }
+    this.saved = staggerMs;
+    this.state = 'hit';
+    this.timer = O.hitStunMs + 200;
     return 'hit';
   }
 }

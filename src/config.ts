@@ -3,11 +3,12 @@ export const CONFIG = {
   view: { width: 360, height: 640 },
   loop: { stepHz: 60, maxFrameMs: 250 },
   input: {
-    swipeMinDist: 28, // px logiques : déplacement horizontal minimal pour un swipe
+    swipeMinDist: 28, // px logiques : déplacement minimal pour un swipe
     swipeMaxMs: 350, // durée max d'un geste pour compter comme swipe/tap
     tapMaxDist: 14, // px logiques : au-delà, ce n'est plus un tap
     splitY: 0.5, // fraction de la hauteur : au-dessus = tête, en dessous = corps
     debugFlashMs: 400,
+    superButton: { x: 180, y: 598, r: 38 }, // bouton du super uppercut (bas, au milieu)
   },
   player: {
     maxHp: 100,
@@ -23,15 +24,29 @@ export const CONFIG = {
     dodgeCooldownMs: 180,
     dodgeShiftPx: 70,
     hitStunMs: 450,
-    counterWindowMs: 1200, // après une esquive réussie
+    counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
+    backCounterWindowMs: 650, // après un recul : fenêtre plus courte
     counterMultiplier: 1.8,
+    counterPunchWindowMs: 280, // frapper dans les X ms avant l'impact = contre
+    counterPunchMultiplier: 2.2,
+  },
+  super: {
+    max: 100,
+    counterGain: 34, // jauge gagnée par un contre
+    uppercutCounterGain: 100, // contre sur un uppercut : jauge pleine
+    dodgeGain: 8,
+    backGain: 5,
+    damage: 34,
+    windupMs: 260, // délai avant l'impact du super uppercut
+    animMs: 640,
+    staggerMs: 1700, // temps d'ouverture de l'adversaire après le super
   },
   opponent: {
     maxHp: 100,
     hitStunMs: 220,
     idleMs: { min: 550, max: 1000 },
     idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
-    sequence: [0, 1, 0, 2, 1, 2, 0, 1], // indices dans PATTERNS : ordre apprenable
+    sequence: [0, 2, 1, 3, 0, 4, 1, 3], // indices dans PATTERNS : ordre apprenable
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre
   },
   fight: {

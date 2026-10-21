@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 
-export type Sfx = 'telegraph' | 'punch' | 'hit' | 'block' | 'dodge' | 'hurt' | 'bell' | 'ko' | 'empty';
+export type Sfx = 'telegraph' | 'punch' | 'hit' | 'block' | 'dodge' | 'hurt' | 'bell' | 'ko' | 'empty' | 'super';
 
 // Sons placeholders générés à la volée (Web Audio), aucun fichier tiers.
 export class Audio {
@@ -41,6 +41,11 @@ export class Audio {
       case 'dodge': this.tone('sine', 500, 1000, 0.12, 0.8); break;
       case 'hurt': this.tone('sawtooth', 110, 35, 0.28, 1); break;
       case 'empty': this.tone('square', 120, 100, 0.06, 0.4); break;
+      case 'super':
+        this.tone('square', 400, 800, 0.1, 0.5);
+        this.tone('square', 600, 1200, 0.12, 0.5, 0.1);
+        this.tone('square', 900, 1600, 0.16, 0.5, 0.2);
+        break;
       case 'bell':
         this.tone('sine', 1300, 1250, 0.7, 0.8);
         this.tone('sine', 2600, 2500, 0.5, 0.3);

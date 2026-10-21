@@ -92,8 +92,17 @@ export class Renderer {
     drawPix(c, this.back);
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
+    // inclinaison et élan : le corps entier participe au coup (pivot au bassin)
+    const body = (img: HTMLCanvasElement) => {
+      c.save();
+      c.translate(CX + ov.pose.dx, 290 + ov.pose.dy);
+      c.transform(ov.pose.sc, 0, -ov.pose.sh * ov.pose.sc, ov.pose.sc, 0, 0);
+      c.translate(-CX, -290);
+      c.drawImage(img, ov.ox, ov.oy);
+      c.restore();
+    };
     const drawOpp = () => {
-      c.drawImage(flashOpp ? ov.white() : ov.frame, ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
+      body(flashOpp ? ov.white() : ov.frame);
       if (o.state === 'idle' && Math.floor(now / 110) % 29 === 0) {
         const ex = ov.pose.dx + ov.pose.hx;
         const ey = ov.pose.dy + ov.pose.hy;
@@ -108,7 +117,7 @@ export class Renderer {
       if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
         c.save();
         c.globalAlpha = 0.55;
-        c.drawImage(ov.tint(o.pattern.color), ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
+        body(ov.tint(o.pattern.color));
         c.restore();
       }
     };

@@ -41,6 +41,8 @@ export interface OppPose {
   ll: number; // pied gauche levé (px)
   lr: number; // pied droit levé (px)
   kb: number; // flexion des genoux
+  sh: number; // inclinaison du buste (appliquée à l'affichage)
+  sc: number; // élan vers l'écran (échelle, appliquée à l'affichage)
 }
 
 export interface OppView {
@@ -253,7 +255,27 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     }
   }
 
-  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow, ll, lr, kb }, tp, ap };
+  // corps entier : il se tend en arrière pour armer, puis se jette vers l'écran en frappant
+  let sh = 0;
+  let sc = 1;
+  if (p && o.state === 'telegraph') {
+    sh = q(s * 0.1 * easeOut(tp), 20);
+    sc = q(1 - 0.02 * tp, 50);
+  } else if (p && o.state === 'attack') {
+    const k = easeOut(ap);
+    const big = p.kind === 'uppercut' ? 0.08 : 0.15;
+    sh = q(lerp(s * 0.1, -s * (p.kind === 'hook' ? 0.2 : 0.16), k), 20);
+    sc = q(0.98 + big * k, 50);
+  } else if (p && o.state === 'recovery') {
+    const e = clamp01((p.recoveryMs - o.timer) / 260);
+    sh = q(-s * 0.12 * (1 - easeOut(e)), 20);
+    sc = q(1 + 0.12 * (1 - easeOut(e)), 50);
+  } else if (o.state === 'hit') {
+    const rec = clamp01(o.timer / 220);
+    sh = q(0.12 * rec, 20);
+    sc = q(1 - 0.05 * rec, 50);
+  }
+  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow, ll, lr, kb, sh, sc }, tp, ap };
 }
 
 // ---------- construction d'une image de l'adversaire ----------
@@ -289,6 +311,17 @@ function part(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => voi
   draw(mk);
   paintVol(dst, mk, r, opts);
   if (post) post(mk);
+}
+
+// bande de mouvement entre deux positions du gant (traînée tramée, comme les « smears » de l'animation)
+function streak(dst: Pix, a: G, b: G): void {
+  mk.clear();
+  const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 4));
+  for (let i = 0; i <= n; i++) {
+    const k = i / n;
+    mk.ellipse(lerp(a.x, b.x, k), lerp(a.y, b.y, k), lerp(a.r, b.r, k) * 0.9, lerp(a.r, b.r, k) * 0.9, 1);
+  }
+  for (let y = mk.by0; y <= mk.by1; y++) for (let x = mk.bx0; x <= mk.bx1; x++) if (mk.get(x, y) && (x + 2 * y) % 3 === 0) dst.set(x, y, R.gloveRed.hi);
 }
 
 function drawGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost = false): void {
@@ -420,7 +453,13 @@ function buildOpponent(pose: OppPose): { canvas: HTMLCanvasElement; x: number; y
   for (const side of order) {
     const g = side === 0 ? pose.gl : pose.gr;
     const e = pose.el[side];
-    for (const t of pose.trail) if (t.side === side) drawGlove(arms, { x: t.x, y: t.y, r: t.r }, e, side === 0 ? 1 : -1, true);
+    const tr = pose.trail.filter((t) => t.side === side);
+    for (let i = 0; i < tr.length; i++) {
+      const a = tr[i];
+      const b = i + 1 < tr.length ? tr[i + 1] : g;
+      streak(arms, a, b);
+    }
+    for (const t of tr) drawGlove(arms, { x: t.x, y: t.y, r: t.r }, e, side === 0 ? 1 : -1, true);
     part(arms, sk, (m) => {
       m.line(SH[side][0], SH[side][1], e[0], e[1], 1, 19);
       m.line(e[0], e[1], g.x, g.y, 1, 17);
@@ -447,9 +486,11 @@ const oppCache = new Map<string, OppEntry>();
 
 export function oppView(o: Opponent, now: number): OppView {
   const { pose, tp, ap } = computePose(o, now);
-  const { dx: _dx, dy: _dy, ...rest } = pose;
+  const { dx: _dx, dy: _dy, sh: _sh, sc: _sc, ...rest } = pose;
   void _dx;
   void _dy;
+  void _sh;
+  void _sc;
   const key = JSON.stringify(rest);
   let e = oppCache.get(key);
   if (!e) {
@@ -471,8 +512,8 @@ export function oppView(o: Opponent, now: number): OppView {
 // ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------
 export const PL_Y0 = 90;
 const PL_H = LH - PL_Y0;
-const U = 0.36; // échelle du joueur (petit, vu en entier, comme Mac dans Punch-Out)
-const FEET = 486; // ligne des pieds à l'écran
+const U = 0.44; // échelle du joueur (petit, vu en entier, comme Mac dans Punch-Out)
+const FEET = 472; // ligne des pieds à l'écran
 const pm = new Pix(LW, PL_H);
 
 function plPart(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => void, opts?: { radius?: number; side?: number }): void {
@@ -490,6 +531,7 @@ interface PlPose {
   k: number;
   bob: number;
   sup: number; // avancement du super uppercut (-1 = aucun)
+  tw: number; // torsion du buste vers la cible (px)
 }
 
 function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): void {
@@ -519,11 +561,11 @@ function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): voi
 function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: number } {
   const out = new Pix(LW, PL_H);
   const cx = CX + pose.ox;
-  const hx = pose.lean * 3;
+  const hx = pose.lean * 3 + pose.tw;
   const X = (n: number) => cx + n * U;
   const XH = (n: number) => cx + hx + n * U;
   const Y = (old: number) => FEET - (646 - old) * U - PL_Y0;
-  const pt = (dx: number, oy: number): [number, number] => [X(dx), Y(oy)];
+  const pt = (dx: number, oy: number): [number, number] => [X(dx) + pose.tw * clamp01((508 - oy) / 70), Y(oy)];
   const pth = (dx: number, oy: number): [number, number] => [XH(dx), Y(oy)];
   const sk = R.skinBack;
   const D = P.skinDeep;
@@ -591,8 +633,9 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
   for (const hand of ['left', 'right'] as const) {
     const s = hand === 'left' ? -1 : 1;
     const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 3), r: 10 };
-    const e: Pt = [X(s * 80), Y(446)];
+    let e: Pt = [X(s * 80), Y(446)];
     let g: G = { ...guard };
+    let wr = 9; // épaisseur de l'avant-bras
     if (pose.sup >= 0 && hand === 'right') {
       const low: G = { x: X(26), y: Y(470), r: 10 };
       const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 24 };
@@ -600,14 +643,28 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
       for (const d of [0.25, 0.5]) plGlove(out, lerpG(low, top, Math.max(0, pose.sup - d)), e, -1, true);
     } else if (pose.hand === hand) {
       const tx = hand === 'left' ? CX - 12 : CX + 12;
-      const ty = (pose.target === 'head' ? 150 : 250) - PL_Y0;
-      const dest: G = { x: tx, y: ty, r: 11 };
+      const ty = (pose.target === 'head' ? 188 : 268) - PL_Y0;
+      const dest: G = { x: tx, y: ty, r: 15 };
       g = lerpG(guard, dest, pose.k);
-      for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, dest, Math.max(0, pose.k - d)), e, s === -1 ? 1 : -1, true);
+      // le bras se déploie de l'épaule jusqu'au gant : le coude suit, l'avant-bras s'affine avec la distance
+      const sh0: Pt = [SHP[hand][0] + pose.tw * 0.5, SHP[hand][1]];
+      const mid: Pt = [(sh0[0] + g.x) / 2 + s * 26 * Math.sin(Math.PI * Math.min(1, pose.k * 1.15)) * 0.7 + s * 6 * (1 - pose.k), (sh0[1] + g.y) / 2 + 10 * (1 - pose.k)];
+      e = lerpP(e, mid, pose.k);
+      wr = Math.round(lerp(13, 11, pose.k));
+      if (pose.k > 0.25) {
+        pm.clear();
+        const n = 6;
+        for (let i = 0; i <= n; i++) {
+          const kk = lerp(Math.max(0, pose.k - 0.35), pose.k, i / n);
+          const gg = lerpG(guard, dest, kk);
+          pm.ellipse(gg.x, gg.y, gg.r * 0.8, gg.r * 0.8, 1);
+        }
+        for (let y = pm.by0; y <= pm.by1; y++) for (let x = pm.bx0; x <= pm.bx1; x++) if (pm.get(x, y) && (x + 2 * y) % 3 === 0) out.set(x, y, R.gloveBlue.hi);
+      }
     }
     plPart(out, sk, (m) => {
-      m.line(SHP[hand][0], SHP[hand][1], e[0], e[1], 1, 10);
-      m.line(e[0], e[1], guard.x, guard.y, 1, 9);
+      m.line(SHP[hand][0] + (pose.hand === hand ? pose.tw * 0.5 : 0), SHP[hand][1], e[0], e[1], 1, pose.hand === hand ? 17 : 11);
+      m.line(e[0], e[1], g.x, g.y, 1, wr);
     }, undefined, { radius: 6, side: 0.2 });
     plGlove(out, g, e, s === -1 ? 1 : -1, false);
   }
@@ -635,6 +692,7 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     k: q(kRaw, 6),
     bob: Math.floor(now / 260) % 2,
     sup: sa ? q(clamp01(sa.t / CONFIG.super.windupMs), 5) : -1,
+    tw: a ? Math.round((a.hand === 'left' ? -1 : 1) * 5 * kRaw) : 0,
   };
   const key = JSON.stringify(pose);
   let e = plCache.get(key);
@@ -654,7 +712,7 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     ox: e.ox,
     oy: e.oy,
     x: Math.round(pl.dodgeOffset * 0.8) + sway + shake,
-    y: PL_Y0 + hurt + Math.round(10 * pl.backAmount),
+    y: PL_Y0 + hurt + Math.round(10 * pl.backAmount) - Math.round(16 * kRaw), // il avance d'un pas en frappant
   };
 }
 

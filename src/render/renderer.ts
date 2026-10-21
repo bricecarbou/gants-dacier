@@ -11,7 +11,7 @@ import { PL_FEET, oppView, playerView } from './sprites';
 const BAYER = [0.125, 0.625, 0.875, 0.375];
 const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
 const CX = LW / 2;
-const OPP_K = 0.84; // l'adversaire est tracé à 84 % de sa taille (proportions de console 8 bits)
+const OPP_K = 0.76; // l'adversaire est tracé à 76 % de sa taille (proportions de console 8 bits : environ 40 % de la hauteur de l'écran)
 const OPP_PIVOT = 372; // ligne des pieds : point fixe de la mise à l'échelle
 
 // Passe un point du sprite de l'adversaire à l'écran (inclinaison + élan autour du bassin, puis échelle autour des pieds).

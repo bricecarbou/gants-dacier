@@ -349,13 +349,13 @@ export function playerView(pl: Player, now: number): PlView {
   const sa = pl.superAnim;
   const supK = sa ? clamp01(sa.t / CONFIG.super.windupMs) : 0;
   const pose: PlPose = {
-    d: Math.abs(pl.dodgeOffset) < 3 ? 0 : Math.sign(pl.dodgeOffset) * stepKey(Math.min(1, Math.abs(pl.dodgeOffset) / CONFIG.player.dodgeShiftPx), [0.4, 0.75, 1]),
+    d: Math.abs(pl.dodgeOffset) < 3 ? 0 : Math.sign(pl.dodgeOffset) * stepKey(Math.min(1, Math.abs(pl.dodgeOffset) / CONFIG.player.dodgeShiftPx), [0.25, 0.45, 0.65, 0.85, 1]),
     hand: a ? a.hand : '',
     target: a ? a.target : '',
-    k: kRaw <= 0.01 ? 0 : stepKey(kRaw, [0.34, 0.7, 1]), // départ, mi-course, extension : trois poses clés
+    k: kRaw <= 0.01 ? 0 : stepKey(kRaw, [0.2, 0.4, 0.6, 0.8, 1]), // le coup se déplie en cinq poses clés
     sup: sa ? q(supK, 5) : -1,
-    cover: pl.backAmount < 0.05 ? 0 : stepKey(pl.backAmount, [0.5, 1]),
-    hurt: pl.stun > 0 ? stepKey(Math.min(1, pl.stun / CONFIG.player.hitStunMs), [0.4, 0.75, 1]) : 0,
+    cover: pl.backAmount < 0.05 ? 0 : stepKey(pl.backAmount, [0.34, 0.67, 1]),
+    hurt: pl.stun > 0 ? stepKey(Math.min(1, pl.stun / CONFIG.player.hitStunMs), [0.25, 0.5, 0.75, 1]) : 0,
     hk: pl.stun > 0 && pl.lastHit ? hitKindOf(pl.lastHit.kind) : '',
     hsd: pl.lastHit && pl.lastHit.side === 'left' ? -1 : 1,
     bob: Math.floor(now / 280) % 2,
@@ -364,7 +364,7 @@ export function playerView(pl: Player, now: number): PlView {
   const key = JSON.stringify(pose);
   let e = plCache.get(key);
   if (!e) {
-    if (plCache.size > 260) plCache.clear();
+    if (plCache.size > 900) plCache.clear();
     const c = buildPlayer(pose);
     e = { frame: c.canvas, ox: c.x, oy: c.y };
     plCache.set(key, e);
@@ -393,18 +393,19 @@ export function playerView(pl: Player, now: number): PlView {
 export function plPrewarmJobs(): (() => void)[] {
   const pl = new Player();
   const jobs: (() => void)[] = [];
+  const total = CONFIG.player.punchAnimMs;
   for (const hand of ['left', 'right'] as const)
     for (const target of ['head', 'body'] as const)
-      for (let i = 0; i <= 12; i += 1)
+      for (let i = 0; i <= 20; i++)
         jobs.push(() => {
-          pl.punchAnim = { hand, target, t: (i / 12) * CONFIG.player.punchAnimMs };
+          pl.punchAnim = { hand, target, t: (i / 20) * total };
           playerView(pl, 0);
           playerView(pl, 300);
         });
-  for (let i = 0; i <= 5; i++)
+  for (let i = 0; i <= 8; i++)
     jobs.push(() => {
       pl.punchAnim = null;
-      pl.superAnim = { t: (i / 5) * CONFIG.super.windupMs, hit: false };
+      pl.superAnim = { t: (i / 8) * CONFIG.super.windupMs, hit: false };
       playerView(pl, 0);
     });
   jobs.push(() => {
@@ -414,23 +415,35 @@ export function plPrewarmJobs(): (() => void)[] {
     playerView(pl, 300);
   });
   for (const dir of ['left', 'right'] as const)
-    for (let i = 1; i <= 4; i++)
+    for (let i = 1; i <= 12; i++)
       jobs.push(() => {
-        pl.dodge = { dir, t: (i / 4) * 110 + 1, power: 1, ms: 380 };
+        pl.dodge = { dir, t: (i / 12) * 110 + 1, power: 1, ms: 380 };
+        playerView(pl, 0);
+        playerView(pl, 300);
+        pl.dodge = { dir, t: (i / 12) * 110 + 1, power: 0.5, ms: 280 };
         playerView(pl, 0);
         playerView(pl, 300);
       });
-  for (let i = 1; i <= 2; i++)
+  for (let i = 1; i <= 6; i++)
     jobs.push(() => {
-      pl.dodge = { dir: 'back', t: (i / 2) * 110 + 1, power: 1, ms: 380 };
+      pl.dodge = { dir: 'back', t: (i / 6) * 110 + 1, power: 1, ms: 380 };
       playerView(pl, 0);
+      playerView(pl, 300);
+      pl.dodge = { dir: 'back', t: (i / 6) * 110 + 1, power: 0.45, ms: 280 };
+      playerView(pl, 0);
+      playerView(pl, 300);
     });
+  for (const kind of ['jab', 'hook', 'uppercut', 'bodyhook', 'overhand'])
+    for (const side of ['left', 'right'] as const)
+      for (let i = 1; i <= 4; i++)
+        jobs.push(() => {
+          pl.dodge = null;
+          pl.lastHit = { kind, side };
+          pl.stun = (i / 4) * CONFIG.player.hitStunMs;
+          playerView(pl, 0);
+          playerView(pl, 300);
+        });
   jobs.push(() => {
-    pl.dodge = null;
-    pl.stun = 100;
-    playerView(pl, 0);
-    pl.stun = 400;
-    playerView(pl, 0);
     pl.stun = 0;
   });
   return jobs;

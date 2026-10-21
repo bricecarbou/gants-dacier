@@ -23,6 +23,13 @@ const ARM1 = 44; // bras court + avant-bras (gant compris) plus long : le coude 
 const ARM2 = 66;
 const LEG1 = 31;
 const LEG2 = 34;
+// Poses clés de chaque phase (le sprite change de pose à chacune ; le déplacement d'ensemble, lui, est continu).
+export const TP_KEYS = [0.14, 0.3, 0.46, 0.62, 0.8, 1]; // armement
+export const AP_KEYS = [0.22, 0.46, 0.7, 0.88, 1]; // frappe
+const REC_KEYS = [0.2, 0.4, 0.6, 0.8, 1]; // retour en garde
+const HIT_KEYS = [0.2, 0.4, 0.65, 1]; // réaction à un coup
+const KO_KEYS = [0.12, 0.28, 0.46, 0.66, 0.84, 1];
+const IDLE_POSES = 12;
 const lerpG = (a: G, b: G, k: number): G => ({ x: Math.round(lerp(a.x, b.x, k)), y: Math.round(lerp(a.y, b.y, k)), r: Math.round(lerp(a.r, b.r, k)) });
 
 export interface OppPose {
@@ -91,9 +98,13 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   const s: -1 | 1 = p && p.side === 'left' ? -1 : 1;
   const ai: 0 | 1 = s === -1 ? 0 : 1;
   // armement : 4 poses clés tenues ; frappe : 3 poses (départ, quasi-impact, impact) — animation par poses, façon console
-  const tp = o.state === 'telegraph' && p ? stepKey(clamp01(1 - o.timer / p.telegraphMs), [0.22, 0.5, 0.8, 1]) : o.state === 'attack' ? 1 : 0;
-  const ap = o.state === 'attack' && p ? stepKey(clamp01(1 - o.timer / p.attackMs), [0.38, 0.8, 1]) : 0;
+  const tp = o.state === 'telegraph' && p ? stepKey(clamp01(1 - o.timer / p.telegraphMs), TP_KEYS) : o.state === 'attack' ? 1 : 0;
+  const ap = o.state === 'attack' && p ? stepKey(clamp01(1 - o.timer / p.attackMs), AP_KEYS) : 0;
 
+  const tpRaw = o.state === 'telegraph' && p ? clamp01(1 - o.timer / p.telegraphMs) : o.state === 'attack' ? 1 : 0;
+  const apRaw = o.state === 'attack' && p ? clamp01(1 - o.timer / p.attackMs) : 0;
+  const tc = easeOut(tpRaw); // armement continu
+  const kc = easeOut(apRaw); // frappe continue
   let expr: Expr = 'calm';
   if (o.state === 'telegraph') expr = 'angry';
   else if (o.state === 'attack') expr = 'shout';
@@ -103,7 +114,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   else if (guardUp) expr = 'guard';
 
   // --- garde vivante : le poids passe d'un pied à l'autre, les genoux fléchissent, les gants et la tête suivent ---
-  const ph = Math.floor(((now % 1300) / 1300) * 8) / 8; // garde : 8 poses tenues (rebond de boxeur)
+  const ph = Math.floor(((now % 1300) / 1300) * IDLE_POSES) / IDLE_POSES; // garde : poses tenues (rebond de boxeur)
   const sn = Math.sin(ph * Math.PI * 2);
   const idle = o.state === 'idle' && !guardUp;
   let px = idle ? 5 * sn : 0;
@@ -147,7 +158,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   if (o.state === 'hit') {
     // il encaisse : la réaction dépend du coup reçu (visage, corps, contre, super)
     const hi = o.hitInfo;
-    const rec = stepKey(clamp01(o.timer / Math.max(1, hi.dur)), [0.3, 0.65, 1]);
+    const rec = stepKey(clamp01(o.timer / Math.max(1, hi.dur)), HIT_KEYS);
     const sg = hi.side;
     const shake = Math.floor(now / 40) % 2 ? 3 : -3;
     feetOut = 6;
@@ -217,7 +228,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
     elbow = -0.5;
     feetOut = 4;
   } else if (o.state === 'ko') {
-    const fall = stepKey(o.koT / 900, [0.2, 0.45, 0.75, 1]);
+    const fall = stepKey(o.koT / 900, KO_KEYS);
     lean = -1.1 * fall;
     px = -8 * fall;
     py = 18 + 62 * fall;
@@ -253,9 +264,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       else gR = g;
       guardL = ai === 0 ? guardL : [-22 + s * 4, -134];
       guardR = ai === 1 ? guardR : [22 + s * 4, -134];
-      dx = Math.round(-s * 12 * t + s * 40 * k);
-      dy = Math.round(-4 * t + 40 * k);
-      sc = q(0.98 + 0.17 * k, 50);
+      dx = Math.round(-s * 12 * tc + s * 40 * kc);
+      dy = Math.round(-4 * tc + 40 * kc);
+      sc = 0.98 + 0.17 * kc;
       if (o.state === 'attack') {
         // pas en avant : le pied du côté qui frappe avance
         if (ai === 0) ll = 6;
@@ -277,9 +288,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       if (o.state === 'attack') for (const d of [0.25, 0.5]) trail.push({ side: ai, ...lerpG(wind, hit, Math.max(0, k - d)) });
       if (ai === 0) gL = g;
       else gR = g;
-      dx = Math.round(s * 18 * k);
-      dy = Math.round(-2 * t + 22 * k);
-      sc = q(0.99 + 0.09 * k, 50);
+      dx = Math.round(s * 18 * kc);
+      dy = Math.round(-2 * tc + 22 * kc);
+      sc = 0.99 + 0.09 * kc;
       if (o.state === 'attack') {
         if (ai === 0) ll = 4;
         else lr = 4;
@@ -304,9 +315,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       if (o.state === 'attack') for (const d of [0.22, 0.45]) trail.push({ side: ai, ...arc(Math.max(0, k - d)) });
       if (ai === 0) gL = g;
       else gR = g;
-      dx = Math.round(-s * 10 * t + s * 30 * k);
-      dy = Math.round(-6 * t + 40 * k);
-      sc = q(0.98 + 0.17 * k, 50);
+      dx = Math.round(-s * 10 * tc + s * 30 * kc);
+      dy = Math.round(-6 * tc + 40 * kc);
+      sc = 0.98 + 0.17 * kc;
       if (o.state === 'attack') {
         if (ai === 0) ll = 7;
         else lr = 7;
@@ -331,9 +342,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       if (o.state === 'attack') for (const d of [0.22, 0.45]) trail.push({ side: ai, ...arc(Math.max(0, k - d)) });
       if (ai === 0) gL = g;
       else gR = g;
-      dx = Math.round(-s * 14 * t + s * 40 * k);
-      dy = Math.round(-2 * t + 34 * k);
-      sc = q(0.98 + 0.16 * k, 50);
+      dx = Math.round(-s * 14 * tc + s * 40 * kc);
+      dy = Math.round(-2 * tc + 34 * kc);
+      sc = 0.98 + 0.16 * kc;
       feetOut = Math.round(8 * t);
       if (o.state === 'attack') {
         if (ai === 0) ll = 6;
@@ -360,9 +371,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       else gR = g;
       guardL = ai === 0 ? guardL : [-22 - s * 6, -134];
       guardR = ai === 1 ? guardR : [22 - s * 6, -134];
-      dx = Math.round(-s * 16 * t + s * 48 * k);
-      dy = Math.round(-4 * t + 34 * k);
-      sc = q(0.98 + 0.17 * k, 50);
+      dx = Math.round(-s * 16 * tc + s * 48 * kc);
+      dy = Math.round(-4 * tc + 34 * kc);
+      sc = 0.98 + 0.17 * kc;
       if (o.state === 'attack') {
         if (ai === 0) ll = 8;
         else lr = 8;
@@ -387,25 +398,26 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       const o2: G = o.state === 'telegraph' ? lerpG({ x: CX - s * 27, y: 178, r: 15 }, lowO, t) : lowO;
       if (ai === 0) gR = o2;
       else gL = o2;
-      dy = Math.round(30 * t * (1 - k) + 18 * k);
-      dx = Math.round(s * 12 * k);
-      sc = q(0.98 + 0.12 * k, 50);
+      dy = Math.round(30 * tc * (1 - kc) + 18 * kc);
+      dx = Math.round(s * 12 * kc);
+      sc = 0.98 + 0.12 * kc;
       feetOut = Math.round(10 * t);
     }
   }
 
   // retour progressif en garde après le coup
   if (o.state === 'recovery' && p) {
-    const e = stepKey(clamp01((p.recoveryMs - o.timer) / 300), [0.3, 0.7, 1]);
+    const e = stepKey(clamp01((p.recoveryMs - o.timer) / 300), REC_KEYS);
     if (e < 1) {
       const end = strikeEnd(p);
       const sg = ai === 0 ? 0 : 1;
       const back = lerpG(end.g, { x: CX + (sg === 0 ? -34 : 34), y: 230, r: 15 }, e);
       if (sg === 0) gL = back;
       else gR = back;
-      dx = Math.round(lerp(end.dx, 0, e));
-      dy = Math.round(lerp(end.dy, 0, e));
-      sc = q(lerp(1.14, 1, e), 50);
+      const eC = easeOut(clamp01((p.recoveryMs - o.timer) / 300));
+      dx = Math.round(lerp(end.dx, 0, eC));
+      dy = Math.round(lerp(end.dy, 0, eC));
+      sc = lerp(1.14, 1, eC);
       lean = lerp(s * 0.2, 0.05, e);
       tw = lerp(s * 1.2, 0, e);
       px = lerp(s * 14, 0, e);
@@ -752,7 +764,7 @@ export function oppView(o: Opponent, now: number): OppView {
   const key = JSON.stringify(rest);
   let e = oppCache.get(key);
   if (!e) {
-    if (oppCache.size > 420) oppCache.clear();
+    if (oppCache.size > 700) oppCache.clear();
     const c = buildOpponent(pose);
     e = { frame: c.canvas, ox: c.x, oy: c.y, tints: new Map() };
     oppCache.set(key, e);
@@ -767,53 +779,69 @@ export function oppView(o: Opponent, now: number): OppView {
   return { pose, tp, ap, frame: e.frame, ox: e.ox, oy: e.oy, white, tint };
 }
 
-// Tâches de préchauffage : construit à l'avance les images d'animation (par petites tranches, sans bloquer l'écran).
+// Tâches de préchauffage : construit à l'avance TOUTES les images d'animation (par petites tranches, sans bloquer l'écran).
 export function oppPrewarmJobs(): (() => void)[] {
   const o = new Opponent();
   const jobs: (() => void)[] = [];
-  for (let i = 0; i < 24; i++)
+  const mid = (j: number, n: number) => (j + 0.5) / n;
+  for (let i = 0; i < IDLE_POSES; i++)
     jobs.push(() => {
       o.state = 'idle';
       o.pattern = null;
-      oppView(o, i * 55 + 1);
+      oppView(o, ((i + 0.5) / IDLE_POSES) * 1300);
     });
+  jobs.push(() => {
+    o.state = 'idle';
+    o.pattern = null;
+    o.guardT = 200;
+    oppView(o, 0);
+    o.guardT = 0;
+  });
   for (const p of PATTERNS) {
-    for (let i = 0; i <= 7; i++) {
+    for (let j = 0; j < TP_KEYS.length; j++)
       jobs.push(() => {
         o.state = 'telegraph';
         o.pattern = p;
-        o.timer = p.telegraphMs * (1 - i / 7);
+        o.timer = p.telegraphMs * (1 - mid(j, TP_KEYS.length));
         oppView(o, 0);
       });
+    for (let j = 0; j < AP_KEYS.length; j++)
       jobs.push(() => {
         o.state = 'attack';
         o.pattern = p;
-        o.timer = p.attackMs * (1 - i / 7);
+        o.timer = p.attackMs * (1 - mid(j, AP_KEYS.length));
         oppView(o, 0);
       });
-    }
-    for (let i = 0; i <= 6; i++)
+    for (let j = 0; j < REC_KEYS.length; j++)
       jobs.push(() => {
         o.state = 'recovery';
         o.pattern = p;
-        o.timer = p.recoveryMs - (i / 6) * 300;
+        o.timer = p.recoveryMs - mid(j, REC_KEYS.length) * 300;
         oppView(o, 0);
       });
   }
-  for (let i = 0; i <= 5; i++)
-    jobs.push(() => {
-      o.state = 'hit';
-      o.pattern = null;
-      o.timer = (i / 5) * 260;
-      oppView(o, 0);
-    });
-  for (let i = 0; i <= 10; i++)
+  jobs.push(() => {
+    o.state = 'recovery';
+    o.pattern = null;
+    o.timer = 500;
+    oppView(o, 0);
+  });
+  for (const kind of ['head', 'body', 'counter', 'super'] as const)
+    for (const side of [-1, 1] as const)
+      for (let j = 0; j < HIT_KEYS.length; j++)
+        jobs.push(() => {
+          o.state = 'hit';
+          o.pattern = null;
+          o.hitInfo = { kind, side, dur: 300 };
+          o.timer = 300 * mid(j, HIT_KEYS.length);
+          oppView(o, 0);
+        });
+  for (let j = 0; j < KO_KEYS.length; j++)
     jobs.push(() => {
       o.state = 'ko';
       o.pattern = null;
-      o.koT = (i / 10) * 900;
+      o.koT = 900 * mid(j, KO_KEYS.length);
       oppView(o, 0);
     });
   return jobs;
 }
-

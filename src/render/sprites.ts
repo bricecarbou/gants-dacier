@@ -135,10 +135,13 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     dx = (Math.floor(now / 40) % 2 ? 3 : -3) - Math.round(6 * rec);
     dy = Math.round(5 * rec);
   }
-  if (o.state === 'recovery' || o.state === 'hit') {
+  if (o.state === 'hit') {
+    gl = { x: CX - 22, y: 262, r: 15 };
+    gr = { x: CX + 26, y: 270, r: 15 };
+    dy += 4;
+  } else if (o.state === 'recovery') {
     gl = { x: CX - 70, y: 296, r: 15 };
     gr = { x: CX + 70, y: 296, r: 15 };
-    el = [[CX - 62, 252], [CX + 62, 252]];
     dy += 6;
   } else if (o.state === 'ko') {
     gl = { x: CX - 80, y: 332, r: 15 };
@@ -298,7 +301,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     sc = q(1 + 0.12 * (1 - easeOut(e)), 50);
   } else if (o.state === 'hit') {
     const rec = clamp01(o.timer / 220);
-    sh = q(0.12 * rec, 20);
+    sh = q(0.2 * rec, 20);
     sc = q(1 - 0.05 * rec, 50);
   }
   el = [ik(SHO[0], [gl.x, gl.y], ARM1, ARM2, -1), ik(SHO[1], [gr.x, gr.y], ARM1, ARM2, 1)];
@@ -565,6 +568,7 @@ interface PlPose {
   sup: number; // avancement du super uppercut (-1 = aucun)
   tw: number; // torsion du buste vers la cible (px)
   air: number; // 0..3 : Nova décolle (jambes repliées)
+  cover: number; // 0..2 : il se couvre la tête (recul)
 }
 
 function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): void {
@@ -669,7 +673,8 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
   for (const hand of ['left', 'right'] as const) {
     const s = hand === 'left' ? -1 : 1;
     const sh0: Pt = [SHP[hand][0] + (pose.hand === hand ? pose.tw * 0.5 : 0), SHP[hand][1]];
-    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 3), r: 10 };
+    const cv = pose.cover / 2;
+    const guard: G = { x: X(s * (46 - 20 * cv)), y: Y(396 + pose.bob * 3 + 36 * cv), r: 10 };
     let g: G = { ...guard };
     const trailTo = (to: G, k: number) => {
       for (const d of [0.22, 0.42]) plGlove(out, lerpG(guard, to, Math.max(0, k - d)), sh0, s === -1 ? 1 : -1, true);
@@ -718,7 +723,8 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     k: q(kRaw, 6),
     bob: Math.floor(now / 260) % 2,
     sup: sa ? q(clamp01(sa.t / CONFIG.super.windupMs), 5) : -1,
-    tw: a ? Math.round((a.hand === 'left' ? -1 : 1) * 5 * kRaw) : 0,
+    tw: a ? Math.round((a.hand === 'left' ? -1 : 1) * 5 * kRaw) : (pl.dodgeOffset < -8 ? -1 : pl.dodgeOffset > 8 ? 1 : 0) * 5,
+    cover: Math.round(2 * clamp01(pl.backAmount)),
     air: a && a.target === 'head' ? Math.round(3 * kRaw) : sa ? Math.round(3 * clamp01(sa.t / CONFIG.super.windupMs)) : 0,
   };
   const key = JSON.stringify(pose);

@@ -2,7 +2,7 @@ import { Opponent } from '../game/opponent';
 import { PATTERNS, type Pattern } from '../game/patterns';
 import { P, R } from './palette';
 import { LW, Pix, bitmap, detail, mirror, paintVol, tintOf, toCanvasCrop, whiteOf, type RampV } from './pixel';
-import { type Pt, Xf, capsule, clamp01, easeOut, ellPts, ik, lerp, q, reach } from './rig';
+import { type Pt, Xf, capsule, clamp01, easeOut, ellPts, ik, lerp, q, reach, stepKey } from './rig';
 
 // « Braze », l'adversaire : personnage original, construit comme une marionnette.
 // Squelette : bassin, buste (se penche et pivote), tête (bascule), bras à 2 segments, jambes à 2 segments, pieds posés au sol.
@@ -90,8 +90,9 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   const kind = p?.kind;
   const s: -1 | 1 = p && p.side === 'left' ? -1 : 1;
   const ai: 0 | 1 = s === -1 ? 0 : 1;
-  const tp = o.state === 'telegraph' && p ? q(clamp01(1 - o.timer / p.telegraphMs), 7) : o.state === 'attack' ? 1 : 0;
-  const ap = o.state === 'attack' && p ? q(clamp01(1 - o.timer / p.attackMs), 7) : 0;
+  // armement : 4 poses clés tenues ; frappe : 3 poses (départ, quasi-impact, impact) — animation par poses, façon console
+  const tp = o.state === 'telegraph' && p ? stepKey(clamp01(1 - o.timer / p.telegraphMs), [0.22, 0.5, 0.8, 1]) : o.state === 'attack' ? 1 : 0;
+  const ap = o.state === 'attack' && p ? stepKey(clamp01(1 - o.timer / p.attackMs), [0.38, 0.8, 1]) : 0;
 
   let expr: Expr = 'calm';
   if (o.state === 'telegraph') expr = 'angry';
@@ -102,7 +103,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   else if (guardUp) expr = 'guard';
 
   // --- garde vivante : le poids passe d'un pied à l'autre, les genoux fléchissent, les gants et la tête suivent ---
-  const ph = (now % 1300) / 1300;
+  const ph = Math.floor(((now % 1300) / 1300) * 8) / 8; // garde : 8 poses tenues (rebond de boxeur)
   const sn = Math.sin(ph * Math.PI * 2);
   const idle = o.state === 'idle' && !guardUp;
   let px = idle ? 5 * sn : 0;
@@ -146,7 +147,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   if (o.state === 'hit') {
     // il encaisse : la réaction dépend du coup reçu (visage, corps, contre, super)
     const hi = o.hitInfo;
-    const rec = clamp01(o.timer / Math.max(1, hi.dur));
+    const rec = stepKey(clamp01(o.timer / Math.max(1, hi.dur)), [0.3, 0.65, 1]);
     const sg = hi.side;
     const shake = Math.floor(now / 40) % 2 ? 3 : -3;
     feetOut = 6;
@@ -216,7 +217,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
     elbow = -0.5;
     feetOut = 4;
   } else if (o.state === 'ko') {
-    const fall = easeOut(o.koT / 900);
+    const fall = stepKey(o.koT / 900, [0.2, 0.45, 0.75, 1]);
     lean = -1.1 * fall;
     px = -8 * fall;
     py = 18 + 62 * fall;
@@ -395,7 +396,7 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
 
   // retour progressif en garde après le coup
   if (o.state === 'recovery' && p) {
-    const e = easeOut(clamp01((p.recoveryMs - o.timer) / 300));
+    const e = stepKey(clamp01((p.recoveryMs - o.timer) / 300), [0.3, 0.7, 1]);
     if (e < 1) {
       const end = strikeEnd(p);
       const sg = ai === 0 ? 0 : 1;

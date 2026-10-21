@@ -8,6 +8,9 @@ export type Pt = [number, number];
 export const lerp = (a: number, b: number, k: number): number => a + (b - a) * k;
 export const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 export const q = (v: number, n: number): number => Math.round(v * n) / n;
+// Animation « par poses clés » : la valeur continue (0..1) est ramenée à l'une des poses de la liste (tenue un instant),
+// comme une animation de console à peu d'images — le mouvement est net, saccadé juste ce qu'il faut.
+export const stepKey = (raw: number, keys: number[]): number => keys[Math.min(keys.length - 1, Math.floor(clamp01(raw) * keys.length))];
 export const easeOut = (k: number): number => 1 - Math.pow(1 - clamp01(k), 3);
 export const easeIn = (k: number): number => Math.pow(clamp01(k), 2.2);
 export const easeInOut = (k: number): number => {

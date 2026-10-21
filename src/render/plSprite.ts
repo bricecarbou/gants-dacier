@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import { Player } from '../game/player';
 import { P, R } from './palette';
 import { LH, LW, Pix, detail, paintVol, toCanvasCrop, whiteOf, type RampV } from './pixel';
-import { type Pt, Xf, capsule, clamp01, easeOut, ellPts, ik, lerp, lerpP, q } from './rig';
+import { type Pt, Xf, capsule, clamp01, easeOut, ellPts, ik, lerp, lerpP, q, stepKey } from './rig';
 
 // « Nova », le joueur : vu de dos, petit, construit comme l'adversaire sur un squelette (bassin, buste qui pivote,
 // tête, bras à longueur fixe, jambes, pieds posés). Il se penche en esquivant, se couvre en parant, bondit pour
@@ -349,16 +349,16 @@ export function playerView(pl: Player, now: number): PlView {
   const sa = pl.superAnim;
   const supK = sa ? clamp01(sa.t / CONFIG.super.windupMs) : 0;
   const pose: PlPose = {
-    d: q(Math.max(-1, Math.min(1, pl.dodgeOffset / CONFIG.player.dodgeShiftPx)), 4),
+    d: Math.abs(pl.dodgeOffset) < 3 ? 0 : Math.sign(pl.dodgeOffset) * stepKey(Math.min(1, Math.abs(pl.dodgeOffset) / CONFIG.player.dodgeShiftPx), [0.4, 0.75, 1]),
     hand: a ? a.hand : '',
     target: a ? a.target : '',
-    k: q(kRaw, 7),
+    k: kRaw <= 0.01 ? 0 : stepKey(kRaw, [0.34, 0.7, 1]), // départ, mi-course, extension : trois poses clés
     sup: sa ? q(supK, 5) : -1,
-    cover: q(clamp01(pl.backAmount), 2),
-    hurt: pl.stun > 0 ? q(Math.min(1, pl.stun / CONFIG.player.hitStunMs), 4) : 0,
+    cover: pl.backAmount < 0.05 ? 0 : stepKey(pl.backAmount, [0.5, 1]),
+    hurt: pl.stun > 0 ? stepKey(Math.min(1, pl.stun / CONFIG.player.hitStunMs), [0.4, 0.75, 1]) : 0,
     hk: pl.stun > 0 && pl.lastHit ? hitKindOf(pl.lastHit.kind) : '',
     hsd: pl.lastHit && pl.lastHit.side === 'left' ? -1 : 1,
-    bob: Math.floor(now / 300) % 2,
+    bob: Math.floor(now / 280) % 2,
     air: a && a.target === 'head' ? Math.round(3 * kRaw) : sa ? Math.round(3 * supK) : pl.stun > 0 && pl.lastHit?.kind === 'uppercut' ? 2 : 0,
   };
   const key = JSON.stringify(pose);

@@ -348,6 +348,7 @@ export class Game {
     if ((dir === 'left' || dir === 'right') && power < (p.needPower ?? 0) && ((p.lateral === 'any') || (p.lateral === 'opposite' && dir !== p.side))) {
       this.say('TROP COURT !', 180 + pl.dodgeOffset * 1.25, 440, '#ffb347'); // la bonne esquive, mais trop petite pour un coup ample
     }
+    if (!dir && pl.sinceDodge < 380) this.say('TROP TÔT !', 180, 440, '#ffb347'); // l'esquive s'est terminée juste avant le coup
     pl.takeHit(p.damage);
     this.punches = []; // les coups en l'air sont annulés
     this.audio.play('hurt');

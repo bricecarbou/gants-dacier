@@ -157,7 +157,8 @@ export class Renderer {
     const drawOpp = () => {
       body(flashOpp ? ov.white() : ov.frame);
       // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
-      if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
+      // signal d'esquive : la silhouette clignote dans la couleur du coup pendant les derniers instants avant l'impact
+      if (o.pattern && this.toImpact(o) <= CONFIG.opponent.cueMs && Math.floor(now / 60) % 2 === 0) {
         c.save();
         c.globalAlpha = 0.55;
         body(ov.tint(o.pattern.color));
@@ -203,7 +204,7 @@ export class Renderer {
     } else {
       this.hud.impactTexts(c, game);
       if (game.phase === 'fight' && game.player.counterT > 0) this.hud.counterHint(c, now);
-      if (o.state === 'telegraph' && ov.tp < 0.75) this.alertMark(c, sigColor, ov.tp);
+      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertMark(c, sigColor, ov.tp); // « ! » = il prépare un coup ; le clignotement dira quand esquiver
       this.hud.drawFight(c, game, dt);
       if (game.controlMode === 'pad' && (game.phase === 'fight' || game.phase === 'intro')) this.padLabels(c, input);
       this.hud.floatingTexts(c, game);
@@ -256,6 +257,14 @@ export class Renderer {
       }
     }
     this.c.putImageData(this.chunkOut, 0, 0);
+  }
+
+  // Temps restant avant l'impact du coup en cours (ms), ou une grande valeur s'il n'y en a pas.
+  private toImpact(o: Game['opponent']): number {
+    if (!o.pattern) return 1e9;
+    if (o.state === 'telegraph') return o.timer + o.pattern.attackMs;
+    if (o.state === 'attack') return o.timer;
+    return 1e9;
   }
 
   private crowdFlashes(c: CanvasRenderingContext2D, now: number): void {
@@ -319,7 +328,7 @@ export class Renderer {
 
     // lueur autour du ou des gants qui chargent
     if (o.state === 'telegraph' || o.state === 'attack') {
-      const blink = o.state === 'attack' || Math.floor(now / 70) % 2 === 0;
+      const blink = (o.state === 'attack' || this.toImpact(o) <= CONFIG.opponent.cueMs) && Math.floor(now / 70) % 2 === 0;
       if (blink) {
         for (const idx of pose.glow) {
           const gg = idx === 0 ? pose.gl : pose.gr;
@@ -357,7 +366,7 @@ export class Renderer {
     // traînées d'esquive : latérale (horizontales) ou recul (verticales)
     const d = g.player.dodge;
     if (d) {
-      const alpha = 1 - d.t / CONFIG.player.dodgeActiveMs;
+      const alpha = 1 - d.t / d.ms;
       if (d.dir === 'back') {
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;

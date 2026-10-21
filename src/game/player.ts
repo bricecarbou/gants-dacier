@@ -16,6 +16,7 @@ export class Player extends Fighter {
   stamina: number = P.maxStamina;
   dodge: { dir: DodgeDir; t: number; power: number; ms: number } | null = null; // power : 0..1 (petite ou grosse esquive)
   lastHit: { kind: string; side: Side } | null = null; // dernier coup encaissé (pour la réaction)
+  sinceDodge = 9999; // temps écoulé depuis la fin de la dernière esquive (pour dire « trop tôt »)
   dodgeCd = 0;
   punchCd = 0;
   punchAnim: PunchAnim | null = null;
@@ -84,9 +85,13 @@ export class Player extends Fighter {
     this.punchCd = Math.max(0, this.punchCd - dt);
     this.counterT = Math.max(0, this.counterT - dt);
     this.regenDelay = Math.max(0, this.regenDelay - dt);
+    this.sinceDodge += dt;
     if (this.dodge) {
       this.dodge.t += dt;
-      if (this.dodge.t >= this.dodge.ms) this.dodge = null;
+      if (this.dodge.t >= this.dodge.ms) {
+        this.dodge = null;
+        this.sinceDodge = 0;
+      }
     }
     if (this.punchAnim) {
       this.punchAnim.t += dt;

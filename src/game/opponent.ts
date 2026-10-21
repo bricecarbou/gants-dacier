@@ -12,6 +12,8 @@ export class Opponent extends Fighter {
   timer = 0;
   koT = 0; // temps écoulé depuis le K.O. (animation de chute)
   guardT = 0; // il lève la garde (le joueur vient de frapper dans ses gants)
+  // réaction au dernier coup reçu (pour l'animation) : quel coup, de quel côté, durée de la réaction
+  hitInfo: { kind: 'head' | 'body' | 'counter' | 'super'; side: -1 | 1; dur: number } = { kind: 'head', side: 1, dur: 220 };
   pattern: Pattern | null = null;
   private seqIndex = 0;
   private saved = 0; // temps de récupération restant pendant un état « touché »
@@ -58,10 +60,10 @@ export class Opponent extends Fighter {
 
   // Séquence apprenable avec un peu de variation.
   private pickPattern(): Pattern {
-    let i: number = O.sequence[this.seqIndex % O.sequence.length];
+    const id: string = O.sequence[this.seqIndex % O.sequence.length];
     this.seqIndex++;
-    if (Math.random() < O.variationChance) i = Math.floor(Math.random() * PATTERNS.length);
-    return PATTERNS[i];
+    if (Math.random() < O.variationChance) return PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    return PATTERNS.find((p) => p.id === id) ?? PATTERNS[0];
   }
 
   update(dt: number): OppEvent[] {
@@ -87,12 +89,23 @@ export class Opponent extends Fighter {
         this.state = 'attack';
         this.timer = this.pattern!.attackMs; // le gant voyage pendant cette phase
         break;
-      case 'attack':
-        events.push({ type: 'impact', pattern: this.pattern! }); // le coup arrive
+      case 'attack': {
+        const done = this.pattern!;
+        events.push({ type: 'impact', pattern: done }); // le coup arrive
         this.ripostingFlag = false;
+        const next = done.chain ? PATTERNS.find((p) => p.id === done.chain) : undefined;
+        if (next) {
+          // enchaînement : le coup suivant part tout de suite, avec un signal court
+          this.pattern = next;
+          this.state = 'telegraph';
+          this.timer = done.chainTelegraphMs ?? 400;
+          events.push({ type: 'telegraph', pattern: next });
+          break;
+        }
         this.state = 'recovery';
-        this.timer = this.pattern!.recoveryMs;
+        this.timer = done.recoveryMs;
         break;
+      }
       case 'recovery':
         this.ripostingFlag = false;
         this.state = 'idle';
@@ -129,6 +142,7 @@ export class Opponent extends Fighter {
       this.state = 'hit';
     }
     this.timer = O.hitStunMs;
+    this.hitInfo.dur = this.timer;
     return 'hit';
   }
 
@@ -142,6 +156,8 @@ export class Opponent extends Fighter {
     this.saved = (this.pattern?.recoveryMs ?? 800) * 0.9;
     this.state = 'hit';
     this.timer = O.hitStunMs + 140;
+    this.hitInfo.kind = 'counter';
+    this.hitInfo.dur = this.timer;
     return 'counter';
   }
 
@@ -156,6 +172,8 @@ export class Opponent extends Fighter {
     this.saved = staggerMs;
     this.state = 'hit';
     this.timer = O.hitStunMs + 200;
+    this.hitInfo.kind = 'super';
+    this.hitInfo.dur = this.timer;
     return 'hit';
   }
 }

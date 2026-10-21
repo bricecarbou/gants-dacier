@@ -130,7 +130,7 @@ export class Renderer {
 
     const o = game.opponent;
     const ov = oppView(o, now);
-    const sigColor = o.pattern ? (o.pattern.kind === 'direct' ? P.yellow : o.pattern.kind === 'hook' ? P.orange : P.red) : P.yellow;
+    const sigColor = o.pattern ? (o.pattern.kind === 'direct' || o.pattern.kind === 'jab' ? P.yellow : o.pattern.kind === 'hook' || o.pattern.kind === 'overhand' ? P.orange : P.red) : P.yellow;
 
     // calque arrière : aura de télégraphie, lignes de vitesse d'attaque, lignes du super
     this.back.clear();
@@ -210,7 +210,7 @@ export class Renderer {
       this.hud.overlay(c, game, now);
     }
     if (game.flashT > 0) {
-      c.fillStyle = `rgba(255,255,255,${Math.min(1, game.flashT / 350)})`;
+      c.fillStyle = `rgba(255,255,255,${Math.min(0.4, game.flashT / 700)})`; // éclair discret : l'écran reste lisible
       c.fillRect(0, 0, LW, LH);
     }
     if (CONFIG.debug.showFps) {

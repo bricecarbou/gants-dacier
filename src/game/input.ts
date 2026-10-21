@@ -34,6 +34,8 @@ interface Gesture {
   done: boolean;
   dir: PadDir | null; // zone de la croix tenue par ce doigt (mode croix)
   btn: 'left' | 'right' | null; // bouton de poing tenu par ce doigt
+  sw: boolean; // swipe d'esquive en cours (on suit l'amplitude du geste)
+  power: number; // amplitude courante du geste (0..1)
 }
 
 function loadMode(): ControlMode {
@@ -60,6 +62,9 @@ export class Input {
   padDir: PadDir | null = null;
   btnLeft = false;
   btnRight = false;
+  // Amplitude (0..1) du dernier geste d'esquive / de parade, et du geste encore tenu : petite ou grosse esquive.
+  lastPower = 1;
+  heldPower = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const { width, height } = CONFIG.view;
@@ -76,7 +81,7 @@ export class Input {
       }
       const p = toLogical(e);
       this.lastPos = { x: p.x, y: p.y };
-      const g: Gesture = { x0: p.x, y0: p.y, t0: performance.now(), done: false, dir: null, btn: null };
+      const g: Gesture = { x0: p.x, y0: p.y, t0: performance.now(), done: false, dir: null, btn: null, sw: false, power: 1 };
       this.gestures.set(e.pointerId, g);
 
       // écran titre : bouton de choix du mode
@@ -97,17 +102,29 @@ export class Input {
         if (g.dir !== null || (g.btn === null && !g.done)) this.padMove(g, p.x, p.y);
         return;
       }
-      if (g.done) return;
       const dx = p.x - g.x0;
       const dy = p.y - g.y0;
-      if (performance.now() - g.t0 > CONFIG.input.swipeMaxMs) return;
       const min = CONFIG.input.swipeMinDist;
+      if (g.sw) {
+        // le doigt continue : plus il va loin, plus l'esquive est grosse
+        g.power = this.swipePower(Math.max(Math.abs(dx), Math.abs(dy)));
+        this.refreshHeld();
+        return;
+      }
+      if (g.done) return;
+      if (performance.now() - g.t0 > CONFIG.input.swipeMaxMs) return;
       if (Math.abs(dx) >= min && Math.abs(dx) > Math.abs(dy) * 0.8) {
         g.done = true;
-        this.push(dx < 0 ? 'dodgeLeft' : 'dodgeRight');
+        g.sw = true;
+        g.power = this.swipePower(Math.abs(dx));
+        this.push(dx < 0 ? 'dodgeLeft' : 'dodgeRight', g.power);
+        this.refreshHeld();
       } else if (dy >= min && dy > Math.abs(dx) * 1.2) {
-        g.done = true; // swipe vers le bas : recul
-        this.push('dodgeBack');
+        g.done = true; // swipe vers le bas : parade
+        g.sw = true;
+        g.power = this.swipePower(dy);
+        this.push('dodgeBack', g.power);
+        this.refreshHeld();
       }
     });
 
@@ -145,8 +162,13 @@ export class Input {
       e.preventDefault();
       if (e.repeat) return;
       this.lastPos = null;
-      this.push(a);
+      this.push(a, e.shiftKey ? 0.5 : 1); // Maj + flèche = petite esquive
     });
+  }
+
+  private swipePower(dist: number): number {
+    const min = CONFIG.input.swipeMinDist;
+    return 0.45 + 0.55 * Math.max(0, Math.min(1, (dist - min) / (min * 1.6)));
   }
 
   setMode(mode: ControlMode): void {
@@ -192,7 +214,8 @@ export class Input {
     const dir = this.zoneAt(x, y);
     if (dir) {
       g.dir = dir;
-      this.fireDir(dir);
+      g.power = this.padPower(x, y);
+      this.fireDir(dir, g.power);
       this.refreshHeld();
       return;
     }
@@ -206,15 +229,29 @@ export class Input {
     const dir = this.zoneAt(x, y);
     if (dir !== g.dir) {
       g.dir = dir;
-      if (dir) this.fireDir(dir);
+      if (dir) {
+        g.power = this.padPower(x, y);
+        this.fireDir(dir, g.power);
+      }
+      this.refreshHeld();
+    } else if (dir) {
+      // même direction : en poussant plus loin sur la croix, l'esquive grossit
+      g.power = this.padPower(x, y);
       this.refreshHeld();
     }
   }
 
-  private fireDir(dir: PadDir): void {
-    if (dir === 'left') this.push('dodgeLeft');
-    else if (dir === 'right') this.push('dodgeRight');
-    else if (dir === 'down') this.push('dodgeBack');
+  // Amplitude selon la distance au centre de la croix : près du centre = petite esquive, au bord = grosse.
+  private padPower(x: number, y: number): number {
+    const d = CONFIG.input.pad.dpad;
+    const t = (Math.hypot(x - d.x, y - d.y) - d.rMin) / (d.rMax - d.rMin);
+    return 0.4 + 0.6 * Math.max(0, Math.min(1, t * 1.25));
+  }
+
+  private fireDir(dir: PadDir, power: number): void {
+    if (dir === 'left') this.push('dodgeLeft', power);
+    else if (dir === 'right') this.push('dodgeRight', power);
+    else if (dir === 'down') this.push('dodgeBack', power);
     // « haut » ne déclenche rien seul : il sert à viser le visage
   }
 
@@ -222,14 +259,17 @@ export class Input {
     this.padDir = null;
     this.btnLeft = false;
     this.btnRight = false;
+    this.heldPower = 0;
     for (const g of this.gestures.values()) {
+      if (g.dir || g.sw) this.heldPower = Math.max(this.heldPower, g.power);
       if (g.dir) this.padDir = this.padDir === 'up' ? 'up' : g.dir;
       if (g.btn === 'left') this.btnLeft = true;
       if (g.btn === 'right') this.btnRight = true;
     }
   }
 
-  private push(a: Action): void {
+  private push(a: Action, power = 1): void {
+    this.lastPower = power;
     this.queue.push(a);
     this.lastAction = a;
     this.lastActionAt = performance.now();

@@ -10,7 +10,7 @@ import { type Pt, Xf, capsule, clamp01, easeOut, ellPts, ik, lerp, lerpP, q } fr
 
 const CX = LW / 2;
 export const PL_FEET = 424; // ligne des pieds à l'écran
-export const PL_JUMP_HEAD = 66; // hauteur du saut pour viser le visage
+export const PL_JUMP_HEAD = 50; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher le visage de l'adversaire)
 const HIP_H = 56; // hauteur du bassin au-dessus des pieds
 const N1 = 30; // segments du bras (constants)
 const N2 = 36;
@@ -31,6 +31,8 @@ interface PlPose {
   sup: number; // super uppercut (-1 = aucun)
   cover: number; // 0..1 : il se couvre la tête (parade)
   hurt: number; // 0..1 : il encaisse
+  hk: '' | 'direct' | 'hook' | 'upper' | 'body' | 'overhand'; // quel coup l'a touché : la réaction change
+  hsd: -1 | 1; // de quel côté
   bob: number; // appui qui alterne
   air: number; // 0..3 : il décolle (jambes repliées)
 }
@@ -101,9 +103,35 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
   let tilt = 0;
   py += 7 * pose.cover;
   hy += 3 * pose.cover;
-  py += 6 * pose.hurt;
-  hy += 4 * pose.hurt;
-  tilt += 0.16 * pose.hurt;
+  const hh = pose.hurt;
+  const hside = pose.hsd;
+  if (hh > 0) {
+    // la réaction dépend du coup encaissé
+    if (pose.hk === 'hook') {
+      lean += -hside * 0.42 * hh;
+      tw += -hside * 1.2 * hh;
+      tilt += -hside * 0.35 * hh;
+      py += 3 * hh;
+    } else if (pose.hk === 'upper') {
+      py -= 12 * hh;
+      tilt += -0.3 * hh;
+      hy -= 3 * hh;
+    } else if (pose.hk === 'body') {
+      py += 12 * hh;
+      hy += 8 * hh;
+      tilt += hside * 0.1 * hh;
+    } else if (pose.hk === 'overhand') {
+      py += 11 * hh;
+      hy += 11 * hh;
+      tilt += hside * 0.3 * hh;
+      lean += hside * 0.12 * hh;
+    } else {
+      py += 5 * hh;
+      hy += 6 * hh;
+      tilt += hside * 0.2 * hh;
+      lean += -0.06 * hh;
+    }
+  }
   if (supering) {
     lean += 0.1 * k;
     tw += 0.7 * k;
@@ -240,11 +268,13 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
     const s = hand === 'left' ? -1 : 1;
     const sh = S[s === -1 ? 0 : 1];
     const cv = pose.cover;
-    const gw = tx(s * (21 - 8 * cv), -50 - 1 * pose.bob + 6 * cv - 3 * pose.hurt);
+    const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
+    const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
+    const gw = tx(s * (21 - 8 * cv + 15 * fl - 6 * clutch), lerp(-50 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
     const guard: G = { x: Math.round(gw[0]), y: Math.round(gw[1]), r: 9.5 };
     let g: G = guard;
     // coude de garde : vu de dos, le bras plié part vers l'avant, donc il paraît court (perspective) — on le place à la main
-    const eg = tx(s * (31 + 2 * cv), -8 + 5 * cv - 2 * pose.hurt);
+    const eg = tx(s * (31 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
     let el: Pt = eg;
     let kk = 0;
     if (supering && hand === 'right') {
@@ -304,6 +334,14 @@ export interface PlView {
   jump: number;
 }
 
+function hitKindOf(kind: string): PlPose['hk'] {
+  if (kind === 'hook') return 'hook';
+  if (kind === 'uppercut') return 'upper';
+  if (kind === 'bodyhook') return 'body';
+  if (kind === 'overhand') return 'overhand';
+  return 'direct';
+}
+
 export function playerView(pl: Player, now: number): PlView {
   const a = pl.punchAnim;
   const u = a ? clamp01(a.t / CONFIG.player.punchAnimMs) : 0;
@@ -317,9 +355,11 @@ export function playerView(pl: Player, now: number): PlView {
     k: q(kRaw, 7),
     sup: sa ? q(supK, 5) : -1,
     cover: q(clamp01(pl.backAmount), 2),
-    hurt: pl.stun > 0 ? q(Math.min(1, pl.stun / CONFIG.player.hitStunMs), 2) : 0,
+    hurt: pl.stun > 0 ? q(Math.min(1, pl.stun / CONFIG.player.hitStunMs), 4) : 0,
+    hk: pl.stun > 0 && pl.lastHit ? hitKindOf(pl.lastHit.kind) : '',
+    hsd: pl.lastHit && pl.lastHit.side === 'left' ? -1 : 1,
     bob: Math.floor(now / 300) % 2,
-    air: a && a.target === 'head' ? Math.round(3 * kRaw) : sa ? Math.round(3 * supK) : 0,
+    air: a && a.target === 'head' ? Math.round(3 * kRaw) : sa ? Math.round(3 * supK) : pl.stun > 0 && pl.lastHit?.kind === 'uppercut' ? 2 : 0,
   };
   const key = JSON.stringify(pose);
   let e = plCache.get(key);
@@ -332,7 +372,13 @@ export function playerView(pl: Player, now: number): PlView {
   const entry = e;
   const shake = pl.stun > 0 ? (Math.floor(now / 40) % 2 ? 4 : -4) : 0; // Nova encaisse : il est secoué
   const sway = Math.round(2 * Math.sin(now / 480)); // léger balancement de garde
-  const lift = a ? Math.round((a.target === 'head' ? PL_JUMP_HEAD : 0) * kRaw) : sa ? Math.round(PL_JUMP_HEAD * 0.8 * supK) : 0;
+  const lift = a
+    ? Math.round((a.target === 'head' ? PL_JUMP_HEAD : 0) * kRaw)
+    : sa
+      ? Math.round(PL_JUMP_HEAD * 0.8 * supK)
+      : pl.stun > 0 && pl.lastHit?.kind === 'uppercut'
+        ? Math.round(14 * Math.min(1, pl.stun / CONFIG.player.hitStunMs))
+        : 0;
   return {
     frame: e.frame,
     white: () => (entry.white ??= whiteOf(entry.frame)),
@@ -370,13 +416,13 @@ export function plPrewarmJobs(): (() => void)[] {
   for (const dir of ['left', 'right'] as const)
     for (let i = 1; i <= 4; i++)
       jobs.push(() => {
-        pl.dodge = { dir, t: (i / 4) * 110 + 1 };
+        pl.dodge = { dir, t: (i / 4) * 110 + 1, power: 1, ms: 380 };
         playerView(pl, 0);
         playerView(pl, 300);
       });
   for (let i = 1; i <= 2; i++)
     jobs.push(() => {
-      pl.dodge = { dir: 'back', t: (i / 2) * 110 + 1 };
+      pl.dodge = { dir: 'back', t: (i / 2) * 110 + 1, power: 1, ms: 380 };
       playerView(pl, 0);
     });
   jobs.push(() => {

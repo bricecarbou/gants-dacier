@@ -192,6 +192,8 @@ export class Game {
     const pl = this.player;
     pl.tick(dt);
     for (const a of actions) this.handleAction(a);
+    // le doigt est encore sur la croix / en train de glisser : l'esquive peut encore grossir
+    if (pl.dodge && this.input.heldPower > pl.dodge.power) pl.dodge.power = this.input.heldPower;
     for (const p of this.punches) p.t -= dt;
     const arrived = this.punches.filter((p) => p.t <= 0);
     this.punches = this.punches.filter((p) => p.t > 0);
@@ -226,11 +228,11 @@ export class Game {
     if (a === 'confirm') return; // appui hors commandes : utile seulement dans les menus
     const pl = this.player;
     if (a === 'dodgeLeft' || a === 'dodgeRight') {
-      pl.tryDodge(a === 'dodgeLeft' ? 'left' : 'right');
+      pl.tryDodge(a === 'dodgeLeft' ? 'left' : 'right', this.input.lastPower);
       return;
     }
     if (a === 'dodgeBack') {
-      pl.tryDodge('back');
+      pl.tryDodge('back', this.input.lastPower);
       return;
     }
     if (a === 'super') {
@@ -263,6 +265,7 @@ export class Game {
     if (o.counterable(P.counterPunchWindowMs)) {
       const upper = o.pattern!.kind === 'uppercut';
       const dmg = Math.round(P.punchDamage[target] * P.counterPunchMultiplier);
+      o.hitInfo.side = hand === 'left' ? 1 : -1;
       const r = o.counterHit(dmg);
       this.audio.play('hit');
       this.impact('counter', x, y, upper ? 'PARADE !' : 'CONTRE !');
@@ -277,6 +280,8 @@ export class Game {
 
     const counter = pl.counterT > 0;
     const dmg = Math.round(P.punchDamage[target] * (counter ? P.counterMultiplier : 1));
+    o.hitInfo.kind = target;
+    o.hitInfo.side = hand === 'left' ? 1 : -1;
     const r = o.receiveHit(dmg);
     if (r === 'blocked') {
       pl.stamina = Math.max(0, pl.stamina - P.blockedPenalty);
@@ -318,7 +323,9 @@ export class Game {
   private resolveImpact(p: Pattern): void {
     const pl = this.player;
     const dir = pl.dodging;
-    if (dodgeWorks(dir, p)) {
+    const power = pl.dodge ? pl.dodge.power : 1;
+    pl.lastHit = { kind: p.kind, side: p.side };
+    if (dodgeWorks(dir, p, power)) {
       pl.counterT = P.counterWindowMs;
       this.audio.play('dodge');
       this.say('ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 450, '#7df9ff');
@@ -327,7 +334,7 @@ export class Game {
     }
     // parade : le coup est arrêté (même un super coup), mais quelques points de vie passent
     if (dir === 'back' && p.blockable) {
-      const chip = Math.max(2, Math.round(p.damage * P.blockChipPct));
+      const chip = Math.max(2, Math.round(p.damage * (0.32 - 0.18 * power))); // garde haute : 32 % passent ; parade profonde : 14 %
       pl.hp = Math.max(0, pl.hp - chip);
       pl.hitFlash = 120;
       this.audio.play('block');
@@ -337,6 +344,9 @@ export class Game {
       this.say(`-${chip}`, 180, 365, '#ffffff');
       if (pl.hp <= 0) this.endByKo('ko-loss');
       return;
+    }
+    if ((dir === 'left' || dir === 'right') && power < (p.needPower ?? 0) && ((p.lateral === 'any') || (p.lateral === 'opposite' && dir !== p.side))) {
+      this.say('TROP COURT !', 180 + pl.dodgeOffset * 1.25, 440, '#ffb347'); // la bonne esquive, mais trop petite pour un coup ample
     }
     pl.takeHit(p.damage);
     this.punches = []; // les coups en l'air sont annulés

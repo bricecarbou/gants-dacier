@@ -4,9 +4,10 @@ export type Side = 'left' | 'right';
 export type DodgeDir = Side | 'back';
 
 // L'esquive en cours évite-t-elle ce coup ?
-export function dodgeWorks(active: DodgeDir | null, p: Pattern): boolean {
+export function dodgeWorks(active: DodgeDir | null, p: Pattern, power = 1): boolean {
   if (!active) return false;
   if (active === 'back') return false; // le bas est une parade, pas une esquive : voir Game.resolveImpact
+  if (power < (p.needPower ?? 0)) return false; // trop court : un coup ample demande une grosse esquive
   if (p.lateral === 'any') return true;
   if (p.lateral === 'opposite') return active !== p.side; // il faut s'écarter du bras qui frappe
   return false;

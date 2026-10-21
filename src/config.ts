@@ -35,7 +35,7 @@ export const CONFIG = {
     dodgeShiftPx: 70,
     hitStunMs: 450,
     counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
-    blockChipPct: 0.2, // part des dégâts qui passent quand on pare (mini 2)
+    blockChipPct: 0.2, // part des dégâts qui passent quand on pare (mini 2) : 32 % en garde haute, 14 % en parade profonde
     counterMultiplier: 1.6,
     counterPunchWindowMs: 440, // frapper dans les X ms avant l'impact = contre
     counterPunchMultiplier: 2.4,
@@ -56,7 +56,8 @@ export const CONFIG = {
     hitStunMs: 220,
     idleMs: { min: 950, max: 1550 },
     idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
-    sequence: [0, 2, 1, 3, 0, 4, 1, 3], // indices dans PATTERNS : ordre apprenable
+    // ids des coups (voir patterns.ts) : ordre apprenable
+    sequence: ['jab-droit', 'direct-gauche', 'crochet-gauche', 'direct-droit', 'un-deux', 'foie-droit', 'jab-gauche', 'crochet-droit', 'marteau-gauche', 'remontant', 'direct-droit', 'foie-gauche', 'marteau-droit', 'direct-gauche'],
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre
   },
   fight: {

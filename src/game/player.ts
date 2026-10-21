@@ -14,7 +14,8 @@ const S = CONFIG.super;
 
 export class Player extends Fighter {
   stamina: number = P.maxStamina;
-  dodge: { dir: DodgeDir; t: number } | null = null;
+  dodge: { dir: DodgeDir; t: number; power: number; ms: number } | null = null; // power : 0..1 (petite ou grosse esquive)
+  lastHit: { kind: string; side: Side } | null = null; // dernier coup encaissé (pour la réaction)
   dodgeCd = 0;
   punchCd = 0;
   punchAnim: PunchAnim | null = null;
@@ -39,18 +40,18 @@ export class Player extends Fighter {
   private ramp(): number {
     if (!this.dodge) return 0;
     const r = 110;
-    return Math.max(0, Math.min(this.dodge.t / r, (P.dodgeActiveMs - this.dodge.t) / r, 1));
+    return Math.max(0, Math.min(this.dodge.t / r, (this.dodge.ms - this.dodge.t) / r, 1));
   }
 
   // Décalage horizontal animé (aller-retour) pendant une esquive latérale.
   get dodgeOffset(): number {
     if (!this.dodge || this.dodge.dir === 'back') return 0;
-    return (this.dodge.dir === 'left' ? -1 : 1) * P.dodgeShiftPx * this.ramp();
+    return (this.dodge.dir === 'left' ? -1 : 1) * P.dodgeShiftPx * (0.45 + 0.55 * this.dodge.power) * this.ramp();
   }
 
   // Intensité (0..1) du pas en arrière.
   get backAmount(): number {
-    return this.dodge && this.dodge.dir === 'back' ? this.ramp() : 0;
+    return this.dodge && this.dodge.dir === 'back' ? this.ramp() * (0.4 + 0.6 * this.dodge.power) : 0;
   }
 
   addMeter(n: number): boolean {
@@ -85,7 +86,7 @@ export class Player extends Fighter {
     this.regenDelay = Math.max(0, this.regenDelay - dt);
     if (this.dodge) {
       this.dodge.t += dt;
-      if (this.dodge.t >= P.dodgeActiveMs) this.dodge = null;
+      if (this.dodge.t >= this.dodge.ms) this.dodge = null;
     }
     if (this.punchAnim) {
       this.punchAnim.t += dt;
@@ -100,10 +101,13 @@ export class Player extends Fighter {
     }
   }
 
-  tryDodge(dir: DodgeDir): boolean {
+  // power : amplitude du geste (0..1). Petite esquive = rapide mais courte ; grosse esquive = protège plus longtemps, plus lente à enchaîner.
+  tryDodge(dir: DodgeDir, power = 1): boolean {
     if (this.stun > 0 || this.dodgeCd > 0 || this.superAnim) return false;
-    this.dodge = { dir, t: 0 };
-    this.dodgeCd = P.dodgeActiveMs + P.dodgeCooldownMs;
+    const pw = Math.max(0.3, Math.min(1, power));
+    const ms = P.dodgeActiveMs * (0.68 + 0.42 * pw);
+    this.dodge = { dir, t: 0, power: pw, ms };
+    this.dodgeCd = ms + P.dodgeCooldownMs * (0.6 + 0.8 * pw);
     return true;
   }
 

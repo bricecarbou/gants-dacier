@@ -77,6 +77,9 @@ function skeleton(px: number, py: number, lean: number, tw: number) {
 // ---------- pose à partir de l'état ----------
 function strikeEnd(p: Pattern): { g: G; dx: number; dy: number } {
   const s = p.side === 'left' ? -1 : 1;
+  if (p.kind === 'jab') return { g: { x: CX + s * 10, y: 304, r: 36 }, dx: s * 8, dy: 24 };
+  if (p.kind === 'overhand') return { g: { x: CX - s * 6, y: 312, r: 46 }, dx: s * 14, dy: 40 };
+  if (p.kind === 'bodyhook') return { g: { x: CX - s * 8, y: 322, r: 44 }, dx: s * 16, dy: 34 };
   if (p.kind === 'direct') return { g: { x: CX + s * 14, y: 318, r: 46 }, dx: s * 14, dy: 34 };
   if (p.kind === 'hook') return { g: { x: CX - s * 8, y: 306, r: 44 }, dx: s * 20, dy: 30 };
   return { g: { x: CX + s * 8, y: 312, r: 46 }, dx: s * 12, dy: 20 };
@@ -141,21 +144,66 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
   }
 
   if (o.state === 'hit') {
-    // il encaisse : buste en arrière, tête projetée, gants repliés sur le ventre, jambes écartées
-    const rec = clamp01(o.timer / 260);
-    lean = -0.2 * rec;
-    px = -9 * rec;
-    py = 7 * rec + 2;
-    tw = 0.2 * rec * (Math.floor(now / 70) % 2 ? 1 : -1);
-    hx = -9 * rec;
-    hy = 4 * rec;
-    tilt = -0.32 * rec;
-    guardL = [-22, -46];
-    guardR = [24, -40];
-    elbow = -0.5;
+    // il encaisse : la réaction dépend du coup reçu (visage, corps, contre, super)
+    const hi = o.hitInfo;
+    const rec = clamp01(o.timer / Math.max(1, hi.dur));
+    const sg = hi.side;
+    const shake = Math.floor(now / 40) % 2 ? 3 : -3;
     feetOut = 6;
-    sc = q(1 - 0.05 * rec, 50);
-    dx = Math.round(Math.floor(now / 40) % 2 ? 3 : -3);
+    dx = shake;
+    if (hi.kind === 'body') {
+      // plié en deux, les gants collés au ventre
+      py = 13 * rec + 2;
+      hy = 11 * rec;
+      lean = sg * 0.05 * rec;
+      tilt = sg * 0.14 * rec;
+      tw = 0.2 * rec * (Math.floor(now / 70) % 2 ? 1 : -1);
+      guardL = [-20, -30];
+      guardR = [22, -30];
+      elbow = -0.6;
+      sc = q(1 - 0.03 * rec, 50);
+    } else if (hi.kind === 'counter') {
+      // le contre le cueille en pleine préparation : il pivote et recule
+      lean = -sg * 0.26 * rec;
+      px = -sg * 11 * rec;
+      py = 8 * rec + 2;
+      tw = -sg * 0.9 * rec;
+      hx = -sg * 9 * rec;
+      hy = 3 * rec;
+      tilt = -sg * 0.42 * rec;
+      guardL = [-60, -84];
+      guardR = [60, -84];
+      elbow = 0.6;
+      sc = q(1 - 0.06 * rec, 50);
+    } else if (hi.kind === 'super') {
+      // le super le soulève : il est projeté en arrière, bras en croix, pieds décollés
+      lean = -0.5 * rec;
+      px = -5 * rec;
+      py = -8 * rec;
+      hx = -10 * rec;
+      hy = 6 * rec;
+      tilt = -0.55 * rec;
+      guardL = [-72, -92];
+      guardR = [72, -92];
+      elbow = 0.8;
+      feetOut = 10;
+      ll = 11 * rec;
+      lr = 11 * rec;
+      sc = q(1 - 0.12 * rec, 50);
+    } else {
+      // coup au visage : la tête part de côté, le buste suit, sueur
+      lean = sg * 0.14 * rec;
+      px = -sg * 4 * rec;
+      py = 7 * rec + 2;
+      tw = sg * 0.55 * rec;
+      hx = sg * 11 * rec;
+      hy = 3 * rec;
+      tilt = sg * 0.4 * rec;
+      guardL = [-26, -64];
+      guardR = [26, -64];
+      elbow = -0.2;
+      sc = q(1 - 0.05 * rec, 50);
+    }
   } else if (o.state === 'recovery') {
     // souffle court : il est ouvert, les bras bas, le buste qui se soulève
     const breath = Math.sin(now / 90);
@@ -209,6 +257,84 @@ function computePose(o: Opponent, now: number, guardUp: boolean): { pose: OppPos
       sc = q(0.98 + 0.17 * k, 50);
       if (o.state === 'attack') {
         // pas en avant : le pied du côté qui frappe avance
+        if (ai === 0) ll = 6;
+        else lr = 6;
+      }
+    } else if (kind === 'jab') {
+      // jab : presque pas d'armement, le poing part de la garde comme un fouet
+      const wind: G = { x: CX + s * 40, y: 160, r: 14 };
+      const hit: G = strikeEnd(p).g;
+      px = -s * 3 * t + s * 10 * k;
+      py = 4 * t + 8 * k;
+      lean = -s * 0.04 * t + s * 0.1 * k;
+      tw = -s * 0.3 * t + s * 0.8 * k;
+      hx = s * 3 * k;
+      hy = 2 * t + 2 * k;
+      tilt = s * 0.05 * k;
+      const startG: G = { x: CX + s * 27, y: 178, r: 15 };
+      const g = o.state === 'telegraph' ? lerpG(startG, wind, t) : lerpG(wind, hit, k);
+      if (o.state === 'attack') for (const d of [0.25, 0.5]) trail.push({ side: ai, ...lerpG(wind, hit, Math.max(0, k - d)) });
+      if (ai === 0) gL = g;
+      else gR = g;
+      dx = Math.round(s * 18 * k);
+      dy = Math.round(-2 * t + 22 * k);
+      sc = q(0.99 + 0.09 * k, 50);
+      if (o.state === 'attack') {
+        if (ai === 0) ll = 4;
+        else lr = 4;
+      }
+    } else if (kind === 'overhand') {
+      // marteau : le bras monte très haut, puis s'abat en arc de haut en bas
+      const wind: G = { x: CX + s * 58, y: 92, r: 17 };
+      const end: G = strikeEnd(p).g;
+      const arc = (kk: number): G => {
+        const g = lerpG(wind, end, kk);
+        return { ...g, x: Math.round(g.x + s * 36 * Math.sin(kk * Math.PI)), y: Math.round(g.y - 10 * Math.sin(kk * Math.PI)) };
+      };
+      px = -s * 8 * t + s * 14 * k;
+      py = 6 * t + 24 * k;
+      lean = -s * 0.2 * t + s * 0.38 * k;
+      tw = -s * 0.7 * t + s * 1.5 * k;
+      hx = -s * 3 * t + s * 6 * k;
+      hy = 3 * t + 11 * k;
+      tilt = -s * 0.1 * t + s * 0.18 * k;
+      const startG: G = { x: CX + s * 27, y: 178, r: 15 };
+      const g = o.state === 'telegraph' ? lerpG(startG, wind, t) : arc(k);
+      if (o.state === 'attack') for (const d of [0.22, 0.45]) trail.push({ side: ai, ...arc(Math.max(0, k - d)) });
+      if (ai === 0) gL = g;
+      else gR = g;
+      dx = Math.round(-s * 10 * t + s * 30 * k);
+      dy = Math.round(-6 * t + 40 * k);
+      sc = q(0.98 + 0.17 * k, 50);
+      if (o.state === 'attack') {
+        if (ai === 0) ll = 7;
+        else lr = 7;
+      }
+    } else if (kind === 'bodyhook') {
+      // crochet au corps : il s'accroupit sur le côté, le poing part bas et rentre dans le ventre
+      const wind: G = { x: CX + s * 94, y: 246, r: 16 };
+      const end: G = strikeEnd(p).g;
+      const arc = (kk: number): G => {
+        const g = lerpG(wind, end, kk);
+        return { ...g, x: Math.round(g.x + s * 16 * Math.sin(kk * Math.PI)), y: Math.round(g.y + 8 * Math.sin(kk * Math.PI)) };
+      };
+      px = -s * 12 * t + s * 16 * k;
+      py = 16 * t + 8 * k;
+      lean = -s * 0.28 * t + s * 0.3 * k;
+      tw = -s * 0.9 * t + s * 1.6 * k;
+      hx = -s * 4 * t + s * 6 * k;
+      hy = 6 * t + 4 * k;
+      tilt = -s * 0.1 * t + s * 0.12 * k;
+      const startG: G = { x: CX + s * 27, y: 178, r: 15 };
+      const g = o.state === 'telegraph' ? lerpG(startG, wind, t) : arc(k);
+      if (o.state === 'attack') for (const d of [0.22, 0.45]) trail.push({ side: ai, ...arc(Math.max(0, k - d)) });
+      if (ai === 0) gL = g;
+      else gR = g;
+      dx = Math.round(-s * 14 * t + s * 40 * k);
+      dy = Math.round(-2 * t + 34 * k);
+      sc = q(0.98 + 0.16 * k, 50);
+      feetOut = Math.round(8 * t);
+      if (o.state === 'attack') {
         if (ai === 0) ll = 6;
         else lr = 6;
       }

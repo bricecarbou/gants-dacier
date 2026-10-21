@@ -26,18 +26,18 @@ export const CONFIG = {
     blockedPenalty: 8, // endurance perdue en frappant dans la garde
     riposteDamage: 14, // l'adversaire bloque puis contre si on frappe sa garde
     riposteTelegraphMs: 340, // ... mais son contre se prépare : on peut l'esquiver
-    punchCooldownMs: 340,
+    punchCooldownMs: 380,
     punchAnimMs: 300,
     punchArriveMs: 130, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
     punchDamage: { head: 5, body: 3 },
-    dodgeActiveMs: 320, // durée pendant laquelle l'esquive protège
+    dodgeActiveMs: 380, // durée pendant laquelle l'esquive protège
     dodgeCooldownMs: 180,
     dodgeShiftPx: 70,
     hitStunMs: 450,
     counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
-    backCounterWindowMs: 650, // après un recul : fenêtre plus courte
+    blockChipPct: 0.2, // part des dégâts qui passent quand on pare (mini 2)
     counterMultiplier: 1.6,
-    counterPunchWindowMs: 380, // frapper dans les X ms avant l'impact = contre
+    counterPunchWindowMs: 440, // frapper dans les X ms avant l'impact = contre
     counterPunchMultiplier: 2.4,
   },
   hitStop: { hit: 45, counter: 90, hurt: 130, super: 230 }, // arrêt sur image à l'impact (ms)
@@ -46,7 +46,6 @@ export const CONFIG = {
     counterGain: 34, // jauge gagnée par un contre
     uppercutCounterGain: 100, // contre sur un uppercut : jauge pleine
     dodgeGain: 8,
-    backGain: 5,
     damage: 34,
     windupMs: 260, // délai avant l'impact du super uppercut
     animMs: 640,
@@ -55,7 +54,7 @@ export const CONFIG = {
   opponent: {
     maxHp: 100,
     hitStunMs: 220,
-    idleMs: { min: 750, max: 1300 },
+    idleMs: { min: 950, max: 1550 },
     idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
     sequence: [0, 2, 1, 3, 0, 4, 1, 3], // indices dans PATTERNS : ordre apprenable
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre

@@ -207,7 +207,11 @@ export function paintVol(dst: Pix, mask: Pix, r: RampV, opts: { outline?: boolea
       const len = Math.hypot(gx, gy, 1);
       const dot = (-gx * LIGHT[0] - gy * LIGHT[1] + LIGHT[2]) / len;
       let v = dot + 0.06 + sideShade * (0.5 - (x + 0.5) / w);
-      const tone = v < 0.36 ? r.sh : v < 0.8 ? r.base : r.hi; // aplats nets, comme un sprite de console 8 bits
+      // ombrage « dessin animé » : un liseré clair côté lumière (haut gauche), une ombre franche côté opposé
+      const d = Math.max(1, Math.min(3, Math.round(radius / 4)));
+      const has = (px: number, py: number) => mask.get(px + x0, py + y0) === 1;
+      void v;
+      const tone = !has(x + d + 1, y + d + 1) || !has(x + d + 1, y) && !has(x, y + d + 1) ? r.sh : !has(x - d, y - d) ? r.hi : r.base;
       dst.set(x + x0, y + y0, tone);
     }
   }

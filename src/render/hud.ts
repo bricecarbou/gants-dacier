@@ -196,10 +196,10 @@ export class Hud {
     pixelText(c, 'COMBAT À PATTERNS', MID, 182, { size: 16, color: '#c9d1e6' }, 'center');
 
     const pad = g.controlMode === 'pad';
-    box(c, 20, 322, 248, 66, '#140e28');
-    const lines = pad ? ['CROIX: ESQUIVE', 'POING: CORPS', 'HAUT+POING: TETE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: RECUL', 'TAP: FRAPPER'];
-    const cols = pad ? ['#7df9ff', '#ffd23f', '#ffd23f'] : ['#7df9ff', '#7df9ff', '#ffd23f'];
-    lines.forEach((t, i) => pixelText(c, t, MID, 329 + i * 19, { size: 16, color: cols[i], outline: null }, 'center'));
+    box(c, 20, 312, 248, 86, '#140e28');
+    const lines = pad ? ['G/D: ESQUIVE', 'BAS: PARER', 'POING: CORPS', 'HAUT+POING: TETE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: PARER', 'TAP: FRAPPER'];
+    const cols = pad ? ['#7df9ff', '#7df9ff', '#ffd23f', '#ffd23f'] : ['#7df9ff', '#7df9ff', '#ffd23f'];
+    lines.forEach((t, i) => pixelText(c, t, MID, 319 + i * 19, { size: 16, color: cols[i], outline: null }, 'center'));
     // choix du mode de commandes : deux onglets
     const mb = CONFIG.input.modeButton;
     const bx = Math.round(mb.x * LS);

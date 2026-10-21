@@ -318,11 +318,23 @@ export class Game {
     const pl = this.player;
     const dir = pl.dodging;
     if (dodgeWorks(dir, p)) {
-      const back = dir === 'back';
-      pl.counterT = back ? P.backCounterWindowMs : P.counterWindowMs;
+      pl.counterT = P.counterWindowMs;
       this.audio.play('dodge');
-      this.say(back ? 'RECUL !' : 'ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 450, '#7df9ff');
-      this.gainMeter(back ? S.backGain : S.dodgeGain);
+      this.say('ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 450, '#7df9ff');
+      this.gainMeter(S.dodgeGain);
+      return;
+    }
+    // parade : le coup est arrêté (même un super coup), mais quelques points de vie passent
+    if (dir === 'back' && p.blockable) {
+      const chip = Math.max(2, Math.round(p.damage * P.blockChipPct));
+      pl.hp = Math.max(0, pl.hp - chip);
+      pl.hitFlash = 120;
+      this.audio.play('block');
+      this.impact('block', 180, 395, 'PARÉ');
+      this.shake(120, 3);
+      this.hitStop = H.hit * 2;
+      this.say(`-${chip}`, 180, 365, '#ffffff');
+      if (pl.hp <= 0) this.endByKo('ko-loss');
       return;
     }
     pl.takeHit(p.damage);

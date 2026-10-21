@@ -321,18 +321,18 @@ export class Game {
       const back = dir === 'back';
       pl.counterT = back ? P.backCounterWindowMs : P.counterWindowMs;
       this.audio.play('dodge');
-      this.say(back ? 'RECUL !' : 'ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 500, '#7df9ff');
+      this.say(back ? 'RECUL !' : 'ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 450, '#7df9ff');
       this.gainMeter(back ? S.backGain : S.dodgeGain);
       return;
     }
     pl.takeHit(p.damage);
     this.punches = []; // les coups en l'air sont annulés
     this.audio.play('hurt');
-    this.impact('hurt', 180, 540, 'BOOM!');
+    this.impact('hurt', 180, 410, 'BOOM!');
     this.shake(300, 8);
     this.hitStop = H.hurt;
     this.flashT = 110;
-    this.say(`-${p.damage}`, 180, 470, '#ff3b4e');
+    this.say(`-${p.damage}`, 180, 360, '#ff3b4e');
     if (pl.hp <= 0) this.endByKo('ko-loss');
   }
 

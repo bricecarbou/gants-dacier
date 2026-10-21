@@ -6,7 +6,7 @@ import { pixelText } from './font';
 import { Hud } from './hud';
 import { P, R } from './palette';
 import { LH, LS, LW, Pix, drawPix, paint, type Ramp } from './pixel';
-import { oppView, playerView } from './sprites';
+import { PL_FEET, oppView, playerView } from './sprites';
 
 const BAYER = [0.125, 0.625, 0.875, 0.375];
 const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
@@ -125,6 +125,13 @@ export class Renderer {
       if (game.phase === 'menu') return;
       const pv = playerView(game.player, now);
       const flash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
+      if (pv.jump > 3) {
+        // ombre au sol : Nova a décollé
+        c.fillStyle = 'rgba(8,6,20,0.45)';
+        const w = Math.max(10, 26 - pv.jump * 0.1);
+        c.fillRect(Math.round(CX + pv.x - w), PL_FEET + 1, Math.round(w * 2), 3);
+        c.fillRect(Math.round(CX + pv.x - w + 3), PL_FEET - 1, Math.round(w * 2 - 6), 2);
+      }
       c.drawImage(flash ? pv.white() : pv.frame, pv.x + pv.ox, pv.y + pv.oy);
     };
     // quand le gant adverse arrive sur Nova, il passe devant lui : on le voit vraiment le toucher
@@ -239,10 +246,11 @@ export class Renderer {
       if (blink) {
         for (const idx of pose.glow) {
           const gg = idx === 0 ? pose.gl : pose.gr;
-          const cx = gg.x + pose.dx;
-          const cy = gg.y + pose.dy;
+          // même transformation que le sprite (inclinaison + élan autour du bassin)
+          const cx = CX + pose.dx + pose.sc * (gg.x - CX) - pose.sh * pose.sc * (gg.y - 290);
+          const cy = 290 + pose.dy + pose.sc * (gg.y - 290);
           for (let a = 0; a < Math.PI * 2; a += 0.06) {
-            const rr = gg.r + 5 + (Math.floor(a * 7) & 1) * 2;
+            const rr = gg.r * pose.sc + 5 + (Math.floor(a * 7) & 1) * 2;
             p.set(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sigColor);
           }
         }
@@ -261,7 +269,7 @@ export class Renderer {
     if (g.player.stun > 0) {
       for (let i = 0; i < 4; i++) {
         const a = now / 200 + (i * Math.PI) / 2;
-        this.sparkle(p, CX + Math.cos(a) * 20, 388 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), R.burstR);
+        this.sparkle(p, CX + Math.cos(a) * 20, 296 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), R.burstR);
       }
     }
     // anneau pointillé : l'adversaire est ouvert
@@ -280,14 +288,14 @@ export class Renderer {
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
           const x = CX - 100 + i * 18 + ((i * 7) % 5);
-          const y = 392 + ((now / 25 + i * 17) % 50);
+          const y = 330 + ((now / 25 + i * 17) % 50);
           p.line(x, y, x, y + 18 + (i % 3) * 8, P.cyan);
         }
       } else {
         const dir = d.dir === 'left' ? 1 : -1;
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
-          const y = 400 + i * 7 + ((now / 30 + i * 3) % 3);
+          const y = 320 + i * 7 + ((now / 30 + i * 3) % 3);
           const x = CX + g.player.dodgeOffset * LS + dir * (34 + (i % 3) * 12);
           p.line(x, y, x + dir * (24 + (i % 4) * 10), y, P.cyan);
         }

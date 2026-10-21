@@ -83,10 +83,10 @@ export class Opponent extends Fighter {
         break;
       case 'telegraph':
         this.state = 'attack';
-        this.timer = this.pattern!.attackMs;
-        events.push({ type: 'impact', pattern: this.pattern! });
+        this.timer = this.pattern!.attackMs; // le gant voyage pendant cette phase
         break;
       case 'attack':
+        events.push({ type: 'impact', pattern: this.pattern! }); // le coup arrive
         this.ripostingFlag = false;
         this.state = 'recovery';
         this.timer = this.pattern!.recoveryMs;

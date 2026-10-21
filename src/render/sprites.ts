@@ -1,8 +1,9 @@
 import { CONFIG } from '../config';
-import type { Opponent } from '../game/opponent';
-import type { Player } from '../game/player';
+import { Opponent } from '../game/opponent';
+import { PATTERNS, type Pattern } from '../game/patterns';
+import { Player } from '../game/player';
 import { P, R } from './palette';
-import { LH, LW, Pix, bitmap, detail, mirror, paintVol, tintOf, toCanvas, whiteOf, type RampV } from './pixel';
+import { LH, LW, Pix, bitmap, detail, mirror, paintVol, tintOf, toCanvasCrop, whiteOf, type RampV } from './pixel';
 
 // Personnages 100 % originaux, assemblés pièce par pièce en pixel art : chaque pièce est peinte avec un relief
 // arrondi éclairé en haut à gauche. Les poses sont quantifiées puis mises en cache (animation « par images »).
@@ -45,8 +46,18 @@ export interface OppView {
   tp: number;
   ap: number;
   frame: HTMLCanvasElement;
-  white: HTMLCanvasElement;
+  ox: number; // décalage du cadre rogné
+  oy: number;
+  white: () => HTMLCanvasElement; // silhouette blanche (flash de dégât), calculée à la demande
   tint: (hex: string) => HTMLCanvasElement; // silhouette colorée (clignotement des signaux)
+}
+
+// Position d'arrivée du gant, du coude et du corps à la fin du coup (sert au retour progressif en garde).
+function strikeEnd(p: Pattern): { g: G; el: Pt; dx: number; dy: number } {
+  const s = p.side === 'left' ? -1 : 1;
+  if (p.kind === 'direct') return { g: { x: CX + s * 14, y: 332, r: 38 }, el: [CX + s * 42, 270], dx: s * 20, dy: 22 };
+  if (p.kind === 'hook') return { g: { x: CX - s * 6, y: 296, r: 38 }, el: [CX + s * 34, 270], dx: s * 28, dy: 16 };
+  return { g: { x: CX + s * 6, y: 262, r: 42 }, el: [CX + s * 44, 300], dx: s * 20, dy: -10 };
 }
 
 // ---------- pose de l'adversaire à partir de son état ----------
@@ -54,8 +65,8 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   const p = o.pattern;
   const kind = p?.kind;
   const s: -1 | 1 = p && p.side === 'left' ? -1 : 1;
-  const tp = o.state === 'telegraph' && p ? q(clamp01(1 - o.timer / p.telegraphMs), 5) : o.state === 'attack' ? 1 : 0;
-  const ap = o.state === 'attack' && p ? q(clamp01(1 - o.timer / p.attackMs), 4) : 0;
+  const tp = o.state === 'telegraph' && p ? q(clamp01(1 - o.timer / p.telegraphMs), 6) : o.state === 'attack' ? 1 : 0;
+  const ap = o.state === 'attack' && p ? q(clamp01(1 - o.timer / p.attackMs), 6) : 0;
   const t = now / 1000;
 
   let expr: Expr = 'calm';
@@ -66,8 +77,8 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   else if (o.state === 'ko') expr = 'ko';
 
   // garde vivante : léger déplacement latéral lent, rebond sur les appuis, tête qui suit avec retard, gants qui alternent
-  let dx = Math.round(7 * Math.sin(t * 1.25));
-  let dy = Math.round(1.6 * Math.sin(t * 6.0));
+  let dx = Math.round(14 * Math.sin(t * 1.3));
+  let dy = Math.round(3 * Math.sin(t * 6.0));
   let hx = -Math.round(dx * 0.35);
   let hy = dy > 0 ? 1 : 0;
   const gb = Math.floor(now / 260) % 2;
@@ -129,14 +140,14 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
         const k = easeOut(tp);
         pos = lerpG(guard, wind, k);
         elbow = lerpP(gEl, wEl, k);
-        dx = Math.round(-s * 8 * tp);
-        dy = 0;
+        dx = Math.round(-s * 16 * tp);
+        dy = -Math.round(5 * tp);
       } else {
         const k = easeOut(ap);
         pos = lerpG(wind, hit, k);
         elbow = lerpP(wEl, hEl, k);
-        dx = Math.round(-s * 8 + s * 18 * k);
-        dy = Math.round(10 * k);
+        dx = Math.round(-s * 16 + s * 36 * k);
+        dy = Math.round(-5 + 27 * k);
         for (const d of [0.25, 0.5]) trail.push({ side: ai, ...lerpG(wind, hit, Math.max(0, k - d)) });
       }
       put(pos, elbow);
@@ -153,14 +164,14 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
         const k = easeOut(tp);
         pos = lerpG(guard, wind, k);
         elbow = lerpP(gEl, wEl, k);
-        dx = Math.round(-s * 12 * tp);
-        dy = 0;
+        dx = Math.round(-s * 22 * tp);
+        dy = -Math.round(4 * tp);
       } else {
         const k = easeOut(ap);
         pos = arc(k);
         elbow = lerpP(wEl, hEl, k);
-        dx = Math.round(-s * 12 + s * 26 * k);
-        dy = Math.round(8 * k);
+        dx = Math.round(-s * 22 + s * 50 * k);
+        dy = Math.round(-4 + 20 * k);
         for (const d of [0.25, 0.5]) trail.push({ side: ai, ...arc(Math.max(0, k - d)) });
       }
       put(pos, elbow);
@@ -196,10 +207,31 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
           gr = lowO;
           el = [el[0], elO];
         }
-        dy = Math.round(26 * (1 - k) - 6 * k);
-        dx = Math.round(s * 10 * k);
+        dy = Math.round(26 * (1 - k) - 16 * k);
+        dx = Math.round(s * 20 * k);
         for (const d of [0.25, 0.5]) trail.push({ side: ai, ...lerpG(lowA, topA, Math.max(0, k - d)) });
       }
+    }
+  }
+
+  // après le coup, le gant et le corps reviennent doucement vers la garde basse
+  if (o.state === 'recovery' && p) {
+    const e = q(easeOut(clamp01((p.recoveryMs - o.timer) / 260)), 5);
+    if (e < 1) {
+      const end = strikeEnd(p);
+      const hang = ai === 0 ? gl : gr;
+      const g2 = lerpG(end.g, hang, e);
+      const el2 = lerpP(end.el, el[ai], e);
+      if (ai === 0) {
+        gl = g2;
+        el = [el2, el[1]];
+      } else {
+        gr = g2;
+        el = [el[0], el2];
+      }
+      dx = Math.round(lerp(end.dx, dx, e));
+      dy = Math.round(lerp(end.dy, dy, e));
+      front = s;
     }
   }
 
@@ -265,7 +297,7 @@ function drawGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost = false): vo
   );
 }
 
-function buildOpponent(pose: OppPose): HTMLCanvasElement {
+function buildOpponent(pose: OppPose): { canvas: HTMLCanvasElement; x: number; y: number } {
   const body = new Pix(LW, OPP_H);
   const head = new Pix(LW, OPP_H);
   const arms = new Pix(LW, OPP_H);
@@ -376,10 +408,17 @@ function buildOpponent(pose: OppPose): HTMLCanvasElement {
   out.blit(body, 0, 0);
   out.blit(head, pose.hx, pose.hy);
   out.blit(arms, 0, 0);
-  return toCanvas(out);
+  return toCanvasCrop(out);
 }
 
-const oppCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasElement; tints: Map<string, HTMLCanvasElement> }>();
+interface OppEntry {
+  frame: HTMLCanvasElement;
+  ox: number;
+  oy: number;
+  white?: HTMLCanvasElement;
+  tints: Map<string, HTMLCanvasElement>;
+}
+const oppCache = new Map<string, OppEntry>();
 
 export function oppView(o: Opponent, now: number): OppView {
   const { pose, tp, ap } = computePose(o, now);
@@ -389,25 +428,26 @@ export function oppView(o: Opponent, now: number): OppView {
   const key = JSON.stringify(rest);
   let e = oppCache.get(key);
   if (!e) {
-    if (oppCache.size > 90) oppCache.clear();
-    const frame = buildOpponent(pose);
-    e = { frame, white: whiteOf(frame), tints: new Map() };
+    if (oppCache.size > 170) oppCache.clear();
+    const c = buildOpponent(pose);
+    e = { frame: c.canvas, ox: c.x, oy: c.y, tints: new Map() };
     oppCache.set(key, e);
   }
   const entry = e;
+  const white = () => (entry.white ??= whiteOf(entry.frame));
   const tint = (hex: string) => {
     let t = entry.tints.get(hex);
     if (!t) entry.tints.set(hex, (t = tintOf(entry.frame, hex)));
     return t;
   };
-  return { pose, tp, ap, frame: e.frame, white: e.white, tint };
+  return { pose, tp, ap, frame: e.frame, ox: e.ox, oy: e.oy, white, tint };
 }
 
-/// ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------
+// ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------
 export const PL_Y0 = 90;
 const PL_H = LH - PL_Y0;
-const U = 0.5; // échelle du joueur (petit, comme Mac dans Punch-Out)
-const BASEY = 492; // où tombe l'ancien bas de sprite (512)
+const U = 0.36; // échelle du joueur (petit, vu en entier, comme Mac dans Punch-Out)
+const FEET = 486; // ligne des pieds à l'écran
 const pm = new Pix(LW, PL_H);
 
 function plPart(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => void, opts?: { radius?: number; side?: number }): void {
@@ -451,29 +491,49 @@ function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): voi
   );
 }
 
-function buildPlayer(pose: PlPose): HTMLCanvasElement {
+function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: number } {
   const out = new Pix(LW, PL_H);
   const cx = CX + pose.ox;
   const hx = pose.lean * 3;
   const X = (n: number) => cx + n * U;
   const XH = (n: number) => cx + hx + n * U;
-  const Y = (old: number) => BASEY + (old - 512) * U - PL_Y0;
+  const Y = (old: number) => FEET - (646 - old) * U - PL_Y0;
   const pt = (dx: number, oy: number): [number, number] => [X(dx), Y(oy)];
   const pth = (dx: number, oy: number): [number, number] => [XH(dx), Y(oy)];
   const sk = R.skinBack;
   const D = P.skinDeep;
 
+  // jambes et chaussures : appuis qui alternent (petit rebond), pas de côté pendant l'esquive, fente quand il frappe
+  const stride = pose.lean * 16;
+  const lift: Record<'left' | 'right', number> = { left: pose.bob ? 8 : 0, right: pose.bob ? 0 : 8 };
+  if (pose.hand === 'left') lift.left += 14;
+  if (pose.hand === 'right') lift.right += 14;
+  for (const side of ['left', 'right'] as const) {
+    const sg = side === 'left' ? -1 : 1;
+    const fx = sg * 30 + stride + sg * Math.abs(pose.lean) * 10;
+    const fy = 636 - lift[side];
+    plPart(out, sk, (m) => m.line(X(sg * 26), Y(556), X(fx), Y(fy), 1, Math.round(34 * U)), undefined, { radius: 6 });
+    plPart(out, R.shoe, (m) => m.ellipse(X(fx), Y(fy + 8), 22 * U + 1, 11 * U + 1, 1), (m) => detail(out, m, (t) => t.line(X(fx) - 6, Y(fy + 14), X(fx) + 6, Y(fy + 14), 1), P.paper), { radius: 4 });
+  }
   // dos
   plPart(
     out,
     sk,
-    (m) => m.poly([pt(-56, 470), pt(-36, 458), pt(-14, 454), pt(14, 454), pt(36, 458), pt(56, 470), pt(64, 513), pt(-64, 513)], 1),
+    (m) => m.poly([pt(-56, 470), pt(-36, 458), pt(-14, 454), pt(14, 454), pt(36, 458), pt(56, 470), pt(60, 508), pt(-60, 508)], 1),
     (m) => {
       detail(out, m, (t) => t.line(X(0), Y(460), X(0), Y(512), 1), D);
       detail(out, m, (t) => { t.line(X(-34), Y(478), X(-20), Y(488), 1); t.line(X(-20), Y(488), X(-6), Y(484), 1); }, D);
       detail(out, m, (t) => { t.line(X(34), Y(478), X(20), Y(488), 1); t.line(X(20), Y(488), X(6), Y(484), 1); }, D);
     },
     { radius: 8, side: 0.28 },
+  );
+  // short bleu à ceinture dorée
+  plPart(
+    out,
+    R.gloveBlue,
+    (m) => m.poly([pt(-54, 500), pt(54, 500), pt(62, 562), pt(14, 574), pt(0, 558), pt(-14, 574), pt(-62, 562)], 1),
+    (m) => detail(out, m, (t) => t.rect(Math.round(X(-56)), Math.round(Y(496)), Math.round(112 * U), Math.round(10 * U) + 1, 1), P.gold),
+    { radius: 6, side: 0.2 },
   );
   for (const s of [-1, 1]) plPart(out, sk, (m) => m.ellipse(X(s * 62), Y(476), 17 * U, 15 * U, 1), undefined, { radius: 5 });
   plPart(out, sk, (m) => m.rect(Math.round(XH(-11)), Math.round(Y(446)), Math.round(22 * U), Math.round(20 * U), 1), undefined, { radius: 3 });
@@ -505,33 +565,39 @@ function buildPlayer(pose: PlPose): HTMLCanvasElement {
   const SHP: Record<'left' | 'right', Pt> = { left: [X(-64), Y(478)], right: [X(64), Y(478)] };
   for (const hand of ['left', 'right'] as const) {
     const s = hand === 'left' ? -1 : 1;
-    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 3), r: 12 };
+    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 3), r: 10 };
     const e: Pt = [X(s * 80), Y(446)];
     let g: G = { ...guard };
     if (pose.sup >= 0 && hand === 'right') {
-      const low: G = { x: X(26), y: Y(470), r: 12 };
-      const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 28 };
+      const low: G = { x: X(26), y: Y(470), r: 10 };
+      const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 24 };
       g = lerpG(low, top, pose.sup);
       for (const d of [0.25, 0.5]) plGlove(out, lerpG(low, top, Math.max(0, pose.sup - d)), e, -1, true);
     } else if (pose.hand === hand) {
       const tx = hand === 'left' ? CX - 12 : CX + 12;
       const ty = (pose.target === 'head' ? 150 : 250) - PL_Y0;
-      const dest: G = { x: tx, y: ty, r: 8 };
+      const dest: G = { x: tx, y: ty, r: 7 };
       g = lerpG(guard, dest, pose.k);
       for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, dest, Math.max(0, pose.k - d)), e, s === -1 ? 1 : -1, true);
     }
     plPart(out, sk, (m) => {
-      m.line(SHP[hand][0], SHP[hand][1], e[0], e[1], 1, 13);
-      m.line(e[0], e[1], guard.x, guard.y, 1, 11);
+      m.line(SHP[hand][0], SHP[hand][1], e[0], e[1], 1, 10);
+      m.line(e[0], e[1], guard.x, guard.y, 1, 9);
     }, undefined, { radius: 6, side: 0.2 });
     plGlove(out, g, e, s === -1 ? 1 : -1, false);
   }
-  return toCanvas(out);
+  return toCanvasCrop(out);
 }
 
-const plCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasElement }>();
+interface PlEntry {
+  frame: HTMLCanvasElement;
+  ox: number;
+  oy: number;
+  white?: HTMLCanvasElement;
+}
+const plCache = new Map<string, PlEntry>();
 
-export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement; white: HTMLCanvasElement; x: number; y: number } {
+export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement; white: () => HTMLCanvasElement; ox: number; oy: number; x: number; y: number } {
   const a = pl.punchAnim;
   const kRaw = a ? Math.sin(clamp01(a.t / CONFIG.player.punchAnimMs) * Math.PI) : 0;
   const sa = pl.superAnim;
@@ -540,19 +606,107 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     lean: pl.dodgeOffset < -8 ? -1 : pl.dodgeOffset > 8 ? 1 : 0,
     hand: a ? a.hand : '',
     target: a ? a.target : '',
-    k: q(kRaw, 4),
+    k: q(kRaw, 6),
     bob: Math.floor(now / 260) % 2,
     sup: sa ? q(clamp01(sa.t / CONFIG.super.windupMs), 5) : -1,
   };
   const key = JSON.stringify(pose);
   let e = plCache.get(key);
   if (!e) {
-    if (plCache.size > 120) plCache.clear();
-    const frame = buildPlayer(pose);
-    e = { frame, white: whiteOf(frame) };
+    if (plCache.size > 90) plCache.clear();
+    const c = buildPlayer(pose);
+    e = { frame: c.canvas, ox: c.x, oy: c.y };
     plCache.set(key, e);
   }
+  const entry = e;
   const hurt = pl.stun > 0 ? Math.round(6 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
   const sway = Math.round(2 * Math.sin(now / 480)); // léger balancement de garde
-  return { ...e, x: Math.round(pl.dodgeOffset * 0.8) + sway, y: PL_Y0 + hurt + Math.round(10 * pl.backAmount) };
+  return {
+    frame: e.frame,
+    white: () => (entry.white ??= whiteOf(entry.frame)),
+    ox: e.ox,
+    oy: e.oy,
+    x: Math.round(pl.dodgeOffset * 0.8) + sway,
+    y: PL_Y0 + hurt + Math.round(10 * pl.backAmount),
+  };
+}
+
+// Construit à l'avance (par petites tranches, sans bloquer l'écran) les images d'animation pour éviter tout à-coup en combat.
+export function prewarmFrames(): void {
+  const o = new Opponent();
+  const pl = new Player();
+  const jobs: (() => void)[] = [];
+  for (let i = 0; i < 26; i++)
+    jobs.push(() => {
+      o.state = 'idle';
+      o.pattern = null;
+      oppView(o, i * 200);
+    });
+  for (const p of PATTERNS) {
+    for (let i = 0; i <= 6; i++) {
+      jobs.push(() => {
+        o.state = 'telegraph';
+        o.pattern = p;
+        o.timer = p.telegraphMs * (1 - i / 6);
+        oppView(o, 0);
+      });
+      jobs.push(() => {
+        o.state = 'attack';
+        o.pattern = p;
+        o.timer = p.attackMs * (1 - i / 6);
+        oppView(o, 0);
+      });
+    }
+    for (let i = 0; i <= 5; i++)
+      jobs.push(() => {
+        o.state = 'recovery';
+        o.pattern = p;
+        o.timer = p.recoveryMs - (i / 5) * 260;
+        oppView(o, 0);
+      });
+  }
+  for (let i = 0; i <= 4; i++)
+    jobs.push(() => {
+      o.state = 'hit';
+      o.pattern = null;
+      o.timer = (i / 4) * 220;
+      oppView(o, 0);
+    });
+  for (let i = 0; i <= 10; i++)
+    jobs.push(() => {
+      o.state = 'ko';
+      o.pattern = null;
+      o.koT = (i / 10) * 900;
+      oppView(o, 0);
+    });
+  for (const hand of ['left', 'right'] as const)
+    for (const target of ['head', 'body'] as const)
+      for (let i = 0; i <= 12; i += 1)
+        jobs.push(() => {
+          pl.punchAnim = { hand, target, t: (i / 12) * CONFIG.player.punchAnimMs };
+          playerView(pl, 0);
+          playerView(pl, 300);
+        });
+  for (let i = 0; i <= 5; i++)
+    jobs.push(() => {
+      pl.punchAnim = null;
+      pl.superAnim = { t: (i / 5) * CONFIG.super.windupMs, hit: false };
+      playerView(pl, 0);
+    });
+  jobs.push(() => {
+    pl.superAnim = null;
+    for (const dir of ['left', 'right'] as const) {
+      pl.dodge = { dir, t: 150 };
+      playerView(pl, 0);
+      playerView(pl, 300);
+    }
+    pl.dodge = null;
+  });
+  let i = 0;
+  const next = () => {
+    const t0 = performance.now();
+    while (i < jobs.length && performance.now() - t0 < 10) jobs[i++]();
+    if (i < jobs.length) setTimeout(next, 16);
+  };
+  setTimeout(next, 300);
 }

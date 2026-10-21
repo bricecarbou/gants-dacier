@@ -5,10 +5,12 @@ import { Input } from './game/input';
 import { startLoop } from './game/loop';
 import { fontLoading } from './render/font';
 import { Renderer } from './render/renderer';
+import { prewarmFrames } from './render/sprites';
 
 void fontLoading; // lance le chargement de la police pixel dès le démarrage
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
+prewarmFrames(); // images d'animation préparées pendant l'écran titre
 const input = new Input(canvas);
 const audio = new Audio();
 const game = new Game(audio, input);

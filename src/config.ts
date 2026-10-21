@@ -26,8 +26,9 @@ export const CONFIG = {
     blockedPenalty: 8, // endurance perdue en frappant dans la garde
     riposteDamage: 14, // l'adversaire bloque puis contre si on frappe sa garde
     riposteTelegraphMs: 340, // ... mais son contre se prépare : on peut l'esquiver
-    punchCooldownMs: 240,
-    punchAnimMs: 170,
+    punchCooldownMs: 340,
+    punchAnimMs: 300,
+    punchArriveMs: 130, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
     punchDamage: { head: 5, body: 3 },
     dodgeActiveMs: 320, // durée pendant laquelle l'esquive protège
     dodgeCooldownMs: 180,
@@ -36,7 +37,7 @@ export const CONFIG = {
     counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
     backCounterWindowMs: 650, // après un recul : fenêtre plus courte
     counterMultiplier: 1.6,
-    counterPunchWindowMs: 280, // frapper dans les X ms avant l'impact = contre
+    counterPunchWindowMs: 380, // frapper dans les X ms avant l'impact = contre
     counterPunchMultiplier: 2.4,
   },
   hitStop: { hit: 45, counter: 90, hurt: 130, super: 230 }, // arrêt sur image à l'impact (ms)
@@ -54,7 +55,7 @@ export const CONFIG = {
   opponent: {
     maxHp: 100,
     hitStunMs: 220,
-    idleMs: { min: 550, max: 1000 },
+    idleMs: { min: 750, max: 1300 },
     idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
     sequence: [0, 2, 1, 3, 0, 4, 1, 3], // indices dans PATTERNS : ordre apprenable
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre

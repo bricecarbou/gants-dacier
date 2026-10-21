@@ -76,6 +76,7 @@ export class Game {
   cheerT = 0; // la foule s'agite (contres, super, K.O.)
   hitStop = 0; // arrêt sur image (ms) : donne du poids aux coups
   private pending: Action[] = [];
+  private punches: { t: number; hand: Side; target: Target }[] = []; // coups lancés, pas encore arrivés
   record: MatchRecord = loadRecord();
   private resultAge = 0;
 
@@ -184,12 +185,19 @@ export class Game {
     this.fx = [];
     this.hitStop = 0;
     this.pending = [];
+    this.punches = [];
   }
 
   private updateFight(dt: number, actions: Action[]): void {
     const pl = this.player;
     pl.tick(dt);
     for (const a of actions) this.handleAction(a);
+    for (const p of this.punches) p.t -= dt;
+    const arrived = this.punches.filter((p) => p.t <= 0);
+    this.punches = this.punches.filter((p) => p.t > 0);
+    for (const p of arrived) {
+      if (this.phase === 'fight') this.resolvePunch(p.hand, p.target);
+    }
 
     // le super uppercut touche à la fin de son armé, sauf si le joueur a été touché entre-temps
     if (pl.superAnim && !pl.superAnim.hit && pl.superAnim.t >= S.windupMs) {
@@ -241,7 +249,12 @@ export class Game {
     }
     if (res !== 'ok') return;
     this.audio.play('punch');
+    this.punches.push({ t: P.punchArriveMs, hand, target });
+  }
 
+  // Le gant arrive : on regarde l'état de l'adversaire à cet instant (garde, contre, ouverture).
+  private resolvePunch(hand: Side, target: Target): void {
+    const pl = this.player;
     const o = this.opponent;
     const x = hand === 'left' ? 160 : 200;
     const y = target === 'head' ? 190 : 310;
@@ -313,6 +326,7 @@ export class Game {
       return;
     }
     pl.takeHit(p.damage);
+    this.punches = []; // les coups en l'air sont annulés
     this.audio.play('hurt');
     this.impact('hurt', 180, 540, 'BOOM!');
     this.shake(300, 8);

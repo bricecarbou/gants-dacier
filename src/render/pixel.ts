@@ -274,6 +274,35 @@ export function whiteOf(src: HTMLCanvasElement): HTMLCanvasElement {
   return cv;
 }
 
+// Comme toCanvas mais rogné à la zone dessinée (économise la mémoire) ; renvoie aussi le décalage à appliquer.
+export function toCanvasCrop(p: Pix): { canvas: HTMLCanvasElement; x: number; y: number } {
+  const x0 = Math.max(0, p.bx0);
+  const y0 = Math.max(0, p.by0);
+  const x1 = Math.min(p.w - 1, p.bx1);
+  const y1 = Math.min(p.h - 1, p.by1);
+  if (x1 < x0 || y1 < y0) return { canvas: toCanvas(new Pix(1, 1)), x: 0, y: 0 };
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  const c = cv.getContext('2d')!;
+  const img = c.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = p.d[(y + y0) * p.w + x + x0];
+      if (!v) continue;
+      const o = (y * w + x) * 4;
+      img.data[o] = RGB[v * 3];
+      img.data[o + 1] = RGB[v * 3 + 1];
+      img.data[o + 2] = RGB[v * 3 + 2];
+      img.data[o + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  return { canvas: cv, x: x0, y: y0 };
+}
+
 // Silhouette unie d'une couleur (signal de télégraphie qui clignote).
 export function tintOf(src: HTMLCanvasElement, hex: string): HTMLCanvasElement {
   const cv = document.createElement('canvas');

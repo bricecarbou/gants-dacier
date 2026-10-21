@@ -92,12 +92,12 @@ export class Renderer {
     drawPix(c, this.back);
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-    c.drawImage(flashOpp ? ov.white : ov.frame, ov.pose.dx, ov.pose.dy);
+    c.drawImage(flashOpp ? ov.white() : ov.frame, ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
     // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
     if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
       c.save();
       c.globalAlpha = 0.55;
-      c.drawImage(ov.tint(o.pattern.color), ov.pose.dx, ov.pose.dy);
+      c.drawImage(ov.tint(o.pattern.color), ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
       c.restore();
     }
 
@@ -106,7 +106,7 @@ export class Renderer {
       const flash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
       c.save();
       c.globalAlpha = 1;
-      c.drawImage(flash ? pv.white : pv.frame, pv.x, pv.y);
+      c.drawImage(flash ? pv.white() : pv.frame, pv.x + pv.ox, pv.y + pv.oy);
       c.restore();
     }
 

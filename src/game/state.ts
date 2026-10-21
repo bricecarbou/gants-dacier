@@ -37,7 +37,8 @@ const F = CONFIG.fight;
 const P = CONFIG.player;
 const S = CONFIG.super;
 const FX_MS = 900;
-const IMPACT_MS = 480;
+const IMPACT_MS = 360;
+const H = CONFIG.hitStop;
 const HIT_WORDS = ['WHAM!', 'BAM!', 'CLAC!', 'POW!'];
 const STORAGE_KEY = 'boxe-record';
 
@@ -72,6 +73,8 @@ export class Game {
   shakeT = 0;
   shakeMag = 0;
   flashT = 0;
+  hitStop = 0; // arrêt sur image (ms) : donne du poids aux coups
+  private pending: Action[] = [];
   record: MatchRecord = loadRecord();
   private resultAge = 0;
 
@@ -100,6 +103,16 @@ export class Game {
     this.impacts = this.impacts.filter((i) => i.t < IMPACT_MS);
     this.shakeT = Math.max(0, this.shakeT - dt);
     this.flashT = Math.max(0, this.flashT - dt);
+
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+      this.pending.push(...actions); // les actions reçues pendant l'arrêt sont jouées juste après
+      return;
+    }
+    if (this.pending.length) {
+      actions = [...this.pending, ...actions];
+      this.pending = [];
+    }
 
     switch (this.phase) {
       case 'menu':
@@ -159,6 +172,8 @@ export class Game {
     this.phase = 'intro';
     this.phaseTimer = F.introMs;
     this.fx = [];
+    this.hitStop = 0;
+    this.pending = [];
   }
 
   private updateFight(dt: number, actions: Action[]): void {
@@ -227,7 +242,8 @@ export class Game {
       const r = o.counterHit(dmg);
       this.audio.play('hit');
       this.impact('counter', x, y, upper ? 'PARADE !' : 'CONTRE !');
-      this.shake(240, 8);
+      this.shake(200, 4);
+      this.hitStop = H.counter;
       this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, '#7df9ff');
       this.gainMeter(upper ? S.uppercutCounterGain : S.counterGain);
       if (r === 'ko') this.endByKo('ko-win');
@@ -242,22 +258,38 @@ export class Game {
       this.audio.play('block');
       this.impact('block', x, y, 'CLANG');
       this.shake(90, 2);
+      if (o.state === 'idle' || o.state === 'telegraph') this.riposte(hand);
       return;
     }
     if (counter) pl.counterT = 0;
     this.audio.play('hit');
     this.impact(counter ? 'counter' : 'hit', x, y, counter ? 'CONTRE !' : HIT_WORDS[Math.floor(Math.random() * HIT_WORDS.length)]);
-    this.shake(counter ? 220 : 140, counter ? 7 : 4);
+    this.shake(counter ? 160 : 90, counter ? 4 : 2);
+    this.hitStop = counter ? H.counter : H.hit;
     this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, counter ? '#7df9ff' : '#ffffff');
     if (r === 'ko') this.endByKo('ko-win');
+  }
+
+  // Frapper la garde : l'adversaire bloque et contre fort.
+  private riposte(hand: Side): void {
+    const pl = this.player;
+    this.opponent.riposte(hand);
+    pl.takeHit(P.riposteDamage);
+    this.audio.play('hurt');
+    this.impact('hurt', 180, 540, 'RIPOSTE!');
+    this.shake(260, 7);
+    this.hitStop = H.hurt;
+    this.say(`-${P.riposteDamage}`, 180, 470, '#ff3b4e');
+    if (pl.hp <= 0) this.endByKo('ko-loss');
   }
 
   private landSuper(): void {
     const r = this.opponent.superHit(S.damage, S.staggerMs);
     this.audio.play('ko');
     this.impact('super', 180, 230, 'SUPER !');
-    this.shake(420, 14);
-    this.flashT = 220;
+    this.shake(380, 8);
+    this.hitStop = H.super;
+    this.flashT = 200;
     this.say(`-${S.damage}`, 220, 160, '#ffe14d');
     if (r === 'ko') this.endByKo('ko-win');
   }
@@ -275,9 +307,11 @@ export class Game {
     }
     pl.takeHit(p.damage);
     this.audio.play('hurt');
-    this.impact('hurt', 180, 470, 'BOOM!');
-    this.shake(300, 10);
-    this.say(`-${p.damage}`, 180, 420, '#ff3b4e');
+    this.impact('hurt', 180, 540, 'BOOM!');
+    this.shake(300, 8);
+    this.hitStop = H.hurt;
+    this.flashT = 110;
+    this.say(`-${p.damage}`, 180, 470, '#ff3b4e');
     if (pl.hp <= 0) this.endByKo('ko-loss');
   }
 

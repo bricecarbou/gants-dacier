@@ -7,6 +7,7 @@ Observe le signal de l'adversaire, esquive, puis contre-attaque quand il est ouv
 - Clavier (debug) : flèches = esquive/recul, W/S et I/K = coups (positions QWERTY), espace = super
 - Coups adverses : direct (côté opposé ou recul), crochet (n'importe quel côté ou recul), uppercut (recul seulement)
 - Contre : frapper dans les 280 ms avant l'impact interrompt le coup et charge le super
+- Frapper sa garde (hors fenêtre de contre) : il bloque et riposte fort
 - Réglages de gameplay : `src/config.ts` et `src/game/patterns.ts`
 
 ```

@@ -85,25 +85,26 @@ export class Hud {
       c.globalAlpha = big ? 1 : k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
       const y = Math.round(f.y * LS - k * (big ? 6 : 28));
       if (big) pixelText(c, 'FIGHT!', MID, y - 24, { size: 48, color: '#ffe14d', shadow: '#7a1020' }, 'center');
-      else pixelText(c, f.text, Math.round(f.x * LS), y, { size: 16, color: f.color, shadow: '#000000' }, 'center');
+      else pixelText(c, f.text, Math.round(f.x * LS), y, { size: f.text.startsWith('-') ? 8 : 16, color: f.color, shadow: '#000000' }, 'center');
       c.restore();
     }
   }
 
   impactTexts(c: Ctx, g: Game): void {
     for (const im of g.impacts) {
-      const k = im.t / 480;
-      const size = im.kind === 'super' ? 32 : im.kind === 'hurt' ? 32 : 16;
+      if (im.kind === 'hit' || im.kind === 'block') continue;
+      const k = im.t / 360;
+      const size = im.kind === 'super' ? 32 : 16;
       c.save();
       c.globalAlpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
-      const col = im.kind === 'counter' || im.kind === 'super' ? '#7df9ff' : im.kind === 'block' ? '#c9d1e6' : '#ffffff';
+      const col = im.kind === 'counter' || im.kind === 'super' ? '#7df9ff' : '#ffffff';
       pixelText(c, im.text.replace(' !', '!'), Math.round(im.x * LS), Math.round(im.y * LS) - size / 2 + (k < 0.15 ? 3 : 0), { size, color: col, outline: INK, shadow: '#000000' }, 'center');
       c.restore();
     }
   }
 
   counterHint(c: Ctx, now: number): void {
-    if (Math.floor(now / 110) % 2) pixelText(c, 'CONTRE!', MID, 392, { size: 16, color: '#7df9ff' }, 'center');
+    if (Math.floor(now / 110) % 2) pixelText(c, 'CONTRE!', MID, 380, { size: 16, color: '#7df9ff' }, 'center');
   }
 
   overlay(c: Ctx, g: Game, now: number): void {

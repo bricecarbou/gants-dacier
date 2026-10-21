@@ -383,9 +383,11 @@ export function oppView(o: Opponent, now: number): OppView {
   return { pose, tp, ap, frame: e.frame, white: e.white };
 }
 
-// ---------- joueur vu de dos ----------
-export const PL_Y0 = 330;
+/// ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------
+export const PL_Y0 = 90;
 const PL_H = LH - PL_Y0;
+const U = 0.6; // échelle du joueur
+const BASEY = 492; // où tombe l'ancien bas de sprite (512)
 const pm = new Pix(LW, PL_H);
 
 function plPart(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => void, opts?: { radius?: number; side?: number }): void {
@@ -412,7 +414,7 @@ function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): voi
     return;
   }
   const ang = Math.atan2(toward[1] - g.y, toward[0] - g.x);
-  plPart(dst, R.cuff, (m) => m.line(g.x, g.y, g.x + Math.cos(ang) * g.r * 1.25, g.y + Math.sin(ang) * g.r * 1.25, 1, Math.round(g.r * 1.0)), undefined, { radius: 4 });
+  plPart(dst, R.cuff, (m) => m.line(g.x, g.y, g.x + Math.cos(ang) * g.r * 1.2, g.y + Math.sin(ang) * g.r * 1.2, 1, Math.max(5, Math.round(g.r * 0.95))), undefined, { radius: 3 });
   plPart(
     dst,
     R.gloveBlue,
@@ -421,93 +423,86 @@ function plGlove(dst: Pix, g: G, toward: Pt, thumb: 1 | -1, ghost: boolean): voi
       m.ellipse(g.x + thumb * g.r * 0.8, g.y + g.r * 0.2, g.r * 0.34, g.r * 0.46, 1);
     },
     (m) => {
-      detail(dst, m, (t) => t.line(g.x - g.r * 0.55, g.y + g.r * 0.5, g.x + g.r * 0.4, g.y + g.r * 0.56, 1), R.gloveBlue.deep);
-      detail(dst, m, (t) => t.ellipse(g.x - g.r * 0.4, g.y - g.r * 0.45, Math.max(1.2, g.r * 0.2), Math.max(1, g.r * 0.13), 1), P.white);
-      // liseré néon
-      detail(dst, m, (t) => { for (let a = Math.PI * 1.1; a < Math.PI * 1.8; a += 0.09) t.set(g.x + Math.cos(a) * g.r * 0.72, g.y + Math.sin(a) * g.r * 0.72, 1); }, P.cyan);
+      detail(dst, m, (t) => t.ellipse(g.x - g.r * 0.4, g.y - g.r * 0.45, Math.max(1, g.r * 0.2), Math.max(1, g.r * 0.13), 1), P.white);
+      detail(dst, m, (t) => { for (let a = Math.PI * 1.1; a < Math.PI * 1.8; a += 0.14) t.set(g.x + Math.cos(a) * g.r * 0.72, g.y + Math.sin(a) * g.r * 0.72, 1); }, P.cyan);
     },
-    { radius: Math.min(g.r * 0.95, 20), side: 0.22 },
+    { radius: Math.min(g.r * 0.95, 16), side: 0.22 },
   );
 }
 
 function buildPlayer(pose: PlPose): HTMLCanvasElement {
   const out = new Pix(LW, PL_H);
-  const Y = (y: number) => y - PL_Y0;
   const cx = CX + pose.ox;
+  const hx = Math.round(pose.ox * 0.2);
+  const X = (n: number) => cx + n * U;
+  const XH = (n: number) => cx + hx + n * U;
+  const Y = (old: number) => BASEY + (old - 512) * U - PL_Y0;
+  const pt = (dx: number, oy: number): [number, number] => [X(dx), Y(oy)];
+  const pth = (dx: number, oy: number): [number, number] => [XH(dx), Y(oy)];
   const sk = R.skinBack;
   const D = P.skinDeep;
-  const hx = Math.round(pose.ox * 0.2);
 
-  // dos : trapèzes, scapulas, colonne
+  // dos
   plPart(
     out,
     sk,
-    (m) => m.poly([[cx - 56, Y(470)], [cx - 36, Y(458)], [cx - 14, Y(454)], [cx + 14, Y(454)], [cx + 36, Y(458)], [cx + 56, Y(470)], [cx + 64, Y(513)], [cx - 64, Y(513)]], 1),
+    (m) => m.poly([pt(-56, 470), pt(-36, 458), pt(-14, 454), pt(14, 454), pt(36, 458), pt(56, 470), pt(64, 513), pt(-64, 513)], 1),
     (m) => {
-      detail(out, m, (t) => t.line(cx, Y(460), cx, Y(512), 1), D);
-      detail(out, m, (t) => { t.line(cx - 34, Y(478), cx - 20, Y(488), 1); t.line(cx - 20, Y(488), cx - 6, Y(484), 1); }, D);
-      detail(out, m, (t) => { t.line(cx + 34, Y(478), cx + 20, Y(488), 1); t.line(cx + 20, Y(488), cx + 6, Y(484), 1); }, D);
-      detail(out, m, (t) => { t.line(cx - 46, Y(496), cx - 24, Y(508), 1); t.line(cx + 46, Y(496), cx + 24, Y(508), 1); }, D);
-      detail(out, m, (t) => { t.line(cx - 14, Y(456), cx - 40, Y(466), 1); t.line(cx + 14, Y(456), cx + 40, Y(466), 1); }, D);
+      detail(out, m, (t) => t.line(X(0), Y(460), X(0), Y(512), 1), D);
+      detail(out, m, (t) => { t.line(X(-34), Y(478), X(-20), Y(488), 1); t.line(X(-20), Y(488), X(-6), Y(484), 1); }, D);
+      detail(out, m, (t) => { t.line(X(34), Y(478), X(20), Y(488), 1); t.line(X(20), Y(488), X(6), Y(484), 1); }, D);
     },
-    { radius: 14, side: 0.28 },
+    { radius: 8, side: 0.28 },
   );
-  // épaules (deltoïdes)
-  for (const s of [-1, 1]) plPart(out, sk, (m) => m.ellipse(cx + s * 62, Y(476), 17, 15, 1), undefined, { radius: 9 });
-  // cou, oreilles
-  plPart(out, sk, (m) => m.rect(cx + hx - 11, Y(446), 22, 20, 1), undefined, { radius: 5 });
+  for (const s of [-1, 1]) plPart(out, sk, (m) => m.ellipse(X(s * 62), Y(476), 17 * U, 15 * U, 1), undefined, { radius: 5 });
+  plPart(out, sk, (m) => m.rect(Math.round(XH(-11)), Math.round(Y(446)), Math.round(22 * U), Math.round(20 * U), 1), undefined, { radius: 3 });
   plPart(out, sk, (m) => {
-    m.ellipse(cx + hx - 24, Y(432), 3.5, 7, 1);
-    m.ellipse(cx + hx + 24, Y(432), 3.5, 7, 1);
-  }, undefined, { radius: 3 });
-  // crâne : cheveux courts (de dos), pointe de nuque, épis
+    m.ellipse(XH(-24), Y(432), 3.5 * U + 1, 7 * U, 1);
+    m.ellipse(XH(24), Y(432), 3.5 * U + 1, 7 * U, 1);
+  }, undefined, { radius: 2 });
+  // tête de dos : cheveux courts, épis, pointe de nuque, bandeau doré et mèches néon
   plPart(
     out,
     R.hairBack,
     (m) => {
-      m.ellipse(cx + hx, Y(428), 23, 24.5, 1);
-      m.poly([[cx + hx - 17, Y(438)], [cx + hx + 17, Y(438)], [cx + hx + 10, Y(452)], [cx + hx, Y(458)], [cx + hx - 10, Y(452)]], 1);
-      m.poly([[cx + hx - 16, Y(416)], [cx + hx - 13, Y(402)], [cx + hx - 7, Y(410)], [cx + hx - 3, Y(396)], [cx + hx + 3, Y(409)], [cx + hx + 9, Y(398)], [cx + hx + 11, Y(412)], [cx + hx + 19, Y(408)], [cx + hx + 17, Y(422)]], 1);
+      m.ellipse(XH(0), Y(428), 23 * U, 24.5 * U, 1);
+      m.poly([pth(-17, 438), pth(17, 438), pth(10, 452), pth(0, 458), pth(-10, 452)], 1);
+      m.poly([pth(-16, 416), pth(-13, 400), pth(-7, 409), pth(-3, 394), pth(3, 408), pth(9, 397), pth(11, 411), pth(19, 407), pth(17, 421)], 1);
     },
     (m) => {
-      // bandeau doré + nœud, mèches néon
-      detail(out, m, (t) => t.rect(cx + hx - 25, Y(425), 50, 5, 1), P.gold);
-      detail(out, m, (t) => t.rect(cx + hx - 25, Y(430), 50, 1, 1), R.goldR.sh);
-      detail(out, m, (t) => { t.line(cx + hx - 8, Y(402), cx + hx - 9, Y(418), 1); t.line(cx + hx + 5, Y(399), cx + hx + 6, Y(415), 1); t.line(cx + hx - 14, Y(436), cx + hx - 10, Y(448), 1); }, R.hairBack.hi);
-      detail(out, m, (t) => t.line(cx + hx - 3, Y(398), cx + hx - 3, Y(404), 1), P.cyan);
+      detail(out, m, (t) => t.rect(Math.round(XH(-25)), Math.round(Y(425)), Math.round(50 * U), 3, 1), P.gold);
+      detail(out, m, (t) => { t.line(XH(-8), Y(402), XH(-9), Y(418), 1); t.line(XH(5), Y(399), XH(6), Y(415), 1); }, R.hairBack.hi);
     },
-    { radius: 8, side: 0.3 },
+    { radius: 5, side: 0.3 },
   );
   plPart(out, R.goldR, (m) => {
-    m.line(cx + hx + 18, Y(427), cx + hx + 34, Y(440), 1, 4);
-    m.line(cx + hx + 18, Y(428), cx + hx + 30, Y(452), 1, 4);
+    m.line(XH(18), Y(427), XH(34), Y(440), 1, 3);
+    m.line(XH(18), Y(428), XH(30), Y(452), 1, 3);
   }, undefined, { radius: 2 });
 
-  // bras + gants
-  const SHP: Record<'left' | 'right', Pt> = { left: [cx - 64, Y(478)], right: [cx + 64, Y(478)] };
+  // bras (restent en garde) et gants : le gant part seul vers l'adversaire, comme dans Punch-Out
+  const SHP: Record<'left' | 'right', Pt> = { left: [X(-64), Y(478)], right: [X(64), Y(478)] };
   for (const hand of ['left', 'right'] as const) {
     const s = hand === 'left' ? -1 : 1;
-    const guard: G = { x: cx + s * 46, y: Y(396 + pose.bob), r: 24 };
+    const guard: G = { x: X(s * 46), y: Y(396 + pose.bob * 2), r: 15 };
+    const e: Pt = [X(s * 80), Y(446)];
     let g: G = { ...guard };
-    let e: Pt = [cx + s * 80, Y(446)];
     if (pose.sup >= 0 && hand === 'right') {
-      const top: G = { x: cx + 2, y: Y(236), r: 56 };
-      const low: G = { x: cx + 26, y: Y(470), r: 24 };
+      const low: G = { x: X(26), y: Y(470), r: 15 };
+      const top: G = { x: cx + 2, y: 236 - PL_Y0, r: 34 };
       g = lerpG(low, top, pose.sup);
-      e = lerpP([cx + 60, Y(470)], [cx + 40, Y(340)], pose.sup);
       for (const d of [0.25, 0.5]) plGlove(out, lerpG(low, top, Math.max(0, pose.sup - d)), e, -1, true);
     } else if (pose.hand === hand) {
       const tx = hand === 'left' ? CX - 12 : CX + 12;
-      const ty = pose.target === 'head' ? 150 : 250;
-      const k = pose.k;
-      g = lerpG(guard, { x: tx + pose.ox * 0.3, y: Y(ty), r: 15 }, k);
-      e = lerpP(e, [cx + s * 44, Y(330)], k);
-      for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, { x: tx + pose.ox * 0.3, y: Y(ty), r: 15 }, Math.max(0, k - d)), e, s === -1 ? 1 : -1, true);
+      const ty = (pose.target === 'head' ? 150 : 250) - PL_Y0;
+      const dest: G = { x: tx + pose.ox * 0.3, y: ty, r: 10 };
+      g = lerpG(guard, dest, pose.k);
+      for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, dest, Math.max(0, pose.k - d)), e, s === -1 ? 1 : -1, true);
     }
     plPart(out, sk, (m) => {
-      m.line(SHP[hand][0], SHP[hand][1], e[0], e[1], 1, 21);
-      m.line(e[0], e[1], g.x, g.y, 1, 19);
-    }, undefined, { radius: 9, side: 0.2 });
+      m.line(SHP[hand][0], SHP[hand][1], e[0], e[1], 1, 13);
+      m.line(e[0], e[1], guard.x, guard.y, 1, 11);
+    }, undefined, { radius: 6, side: 0.2 });
     plGlove(out, g, e, s === -1 ? 1 : -1, false);
   }
   return toCanvas(out);
@@ -535,6 +530,6 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     e = { frame, white: whiteOf(frame) };
     plCache.set(key, e);
   }
-  const hurt = pl.stun > 0 ? Math.round(10 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
-  return { ...e, y: PL_Y0 + hurt + Math.round(26 * pl.backAmount) };
+  const hurt = pl.stun > 0 ? Math.round(6 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
+  return { ...e, y: PL_Y0 + hurt + Math.round(12 * pl.backAmount) };
 }

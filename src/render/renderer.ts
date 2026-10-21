@@ -82,7 +82,6 @@ export class Renderer {
     this.back.clear();
     if (game.phase !== 'menu') {
       if (o.state === 'telegraph') this.aura(this.back, ov.tp, sigColor, now);
-      if (o.state === 'attack') this.speed(this.back, Math.floor(now / 55), P.paper);
       if (game.player.superAnim) this.speed(this.back, Math.floor(now / 45) + 99, P.cyan);
     }
     drawPix(c, this.back);
@@ -228,41 +227,21 @@ export class Renderer {
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
           const x = CX - 100 + i * 18 + ((i * 7) % 5);
-          const y = 360 + ((now / 25 + i * 17) % 60);
-          p.line(x, y, x, y + 26 + (i % 3) * 10, P.cyan);
+          const y = 392 + ((now / 25 + i * 17) % 50);
+          p.line(x, y, x, y + 18 + (i % 3) * 8, P.cyan);
         }
       } else {
         const dir = d.dir === 'left' ? 1 : -1;
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
-          const y = 372 + i * 12 + ((now / 30 + i * 3) % 4);
-          const x = CX + g.player.dodgeOffset * LS + dir * (48 + (i % 3) * 16);
-          p.line(x, y, x + dir * (34 + (i % 4) * 14), y, P.cyan);
+          const y = 400 + i * 7 + ((now / 30 + i * 3) % 3);
+          const x = CX + g.player.dodgeOffset * LS + dir * (34 + (i % 3) * 12);
+          p.line(x, y, x + dir * (24 + (i % 4) * 10), y, P.cyan);
         }
       }
     }
-    // impacts : lignes radiales + étoile
-    for (const im of g.impacts) {
-      const k = im.t / 480;
-      const s = Math.min(1, 1 - Math.pow(1 - Math.min(1, k * 3.4), 3));
-      const spec = {
-        hit: { R: 43, r: 22, ramp: R.burstY },
-        counter: { R: 58, r: 29, ramp: R.burstC },
-        block: { R: 29, r: 16, ramp: R.burstW },
-        hurt: { R: 77, r: 38, ramp: R.burstR },
-        super: { R: 100, r: 50, ramp: R.burstC },
-      }[im.kind];
-      const x = im.x * LS;
-      const y = im.y * LS;
-      const rr = rngf(Math.floor(im.x * 3 + im.y));
-      for (let i = 0; i < 20; i++) {
-        const a = rr() * Math.PI * 2;
-        const r0 = spec.R * 0.8 * s;
-        const r1 = spec.R * (1.5 + rr() * 0.9) * s;
-        p.line(x + Math.cos(a) * r0, y + Math.sin(a) * r0, x + Math.cos(a) * r1, y + Math.sin(a) * r1, P.paper);
-      }
-      this.star(p, x, y, spec.R * s, spec.r * s, 9, k * 0.3, spec.ramp, Math.floor(im.x * 7 + im.y));
-    }
+    // impacts : étincelles façon 8/16 bits
+    for (const im of g.impacts) this.impactFx(p, im.kind, im.x * LS, im.y * LS, im.t / 360);
     // cadre cyan : fenêtre de contre
     if (g.phase === 'fight' && g.player.counterT > 0) {
       const a = (0.5 + 0.3 * Math.sin(now / 70)) * Math.min(1, (g.player.counterT / CONFIG.player.counterWindowMs) * 3);
@@ -280,6 +259,41 @@ export class Renderer {
       }
     }
     if (g.phase === 'fight' || g.phase === 'intro') this.superButton(p, g, now);
+  }
+
+  // Étoile à 4 branches (étincelle de coup).
+  private sparkle(p: Pix, x: number, y: number, s: number, ramp: Ramp): void {
+    if (s < 2) return;
+    const a = s * 0.22;
+    this.mask.clear();
+    this.mask.poly([[x, y - s], [x + a, y - a], [x + s, y], [x + a, y + a], [x, y + s], [x - a, y + a], [x - s, y], [x - a, y - a]], 1);
+    paint(p, this.mask, ramp);
+  }
+
+  // Effets de coups sobres : une étincelle qui grandit puis rétrécit, comme sur console 8/16 bits.
+  private impactFx(p: Pix, kind: 'hit' | 'counter' | 'block' | 'hurt' | 'super', x: number, y: number, k: number): void {
+    const pulse = k < 0.25 ? 0.5 + k * 2 : k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+    if (kind === 'hit') {
+      this.sparkle(p, x, y, 17 * pulse, R.burstY);
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.rect(Math.round(x + dx * (16 * k + 8)), Math.round(y + dy * (16 * k + 8)), 2, 2, P.white);
+    } else if (kind === 'block') {
+      this.sparkle(p, x, y, 9 * pulse, R.burstW);
+    } else if (kind === 'counter') {
+      this.sparkle(p, x, y, 26 * pulse, R.burstC);
+      this.circle(p, x, y, 12 + 40 * k, P.cyan, 0, Math.PI * 2, 0.07);
+    } else if (kind === 'hurt') {
+      this.sparkle(p, x, y, 22 * pulse, R.burstR);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + k;
+        this.sparkle(p, x + Math.cos(a) * (12 + 38 * k), y + Math.sin(a) * (12 + 38 * k), 6 * pulse, R.burstY);
+      }
+    } else {
+      this.sparkle(p, x, y, 44 * pulse, R.burstC);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        this.sparkle(p, x + Math.cos(a) * (20 + 90 * k), y + Math.sin(a) * (20 + 90 * k), 11 * pulse, R.burstY);
+      }
+    }
   }
 
   private edgeGlow(p: Pix, w: number, a: number, color: number): void {

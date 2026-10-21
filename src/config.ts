@@ -16,20 +16,22 @@ export const CONFIG = {
     punchCost: 14,
     staminaRegenPerSec: 22,
     staminaRegenDelayMs: 400, // pause de régénération après un coup
-    blockedPenalty: 6, // endurance perdue en frappant dans la garde
+    blockedPenalty: 8, // endurance perdue en frappant dans la garde
+    riposteDamage: 14, // l'adversaire bloque puis riposte si on frappe sa garde
     punchCooldownMs: 240,
     punchAnimMs: 170,
-    punchDamage: { head: 7, body: 5 },
+    punchDamage: { head: 5, body: 3 },
     dodgeActiveMs: 320, // durée pendant laquelle l'esquive protège
     dodgeCooldownMs: 180,
     dodgeShiftPx: 70,
     hitStunMs: 450,
     counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
     backCounterWindowMs: 650, // après un recul : fenêtre plus courte
-    counterMultiplier: 1.8,
+    counterMultiplier: 1.6,
     counterPunchWindowMs: 280, // frapper dans les X ms avant l'impact = contre
-    counterPunchMultiplier: 2.2,
+    counterPunchMultiplier: 2.4,
   },
+  hitStop: { hit: 45, counter: 90, hurt: 130, super: 230 }, // arrêt sur image à l'impact (ms)
   super: {
     max: 100,
     counterGain: 34, // jauge gagnée par un contre

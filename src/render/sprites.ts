@@ -140,8 +140,8 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     gr = { x: CX + 26, y: 270, r: 15 };
     dy += 4;
   } else if (o.state === 'recovery') {
-    gl = { x: CX - 70, y: 296, r: 15 };
-    gr = { x: CX + 70, y: 296, r: 15 };
+    gl = { x: CX - 34, y: 246, r: 15 };
+    gr = { x: CX + 34, y: 246, r: 15 };
     dy += 6;
   } else if (o.state === 'ko') {
     gl = { x: CX - 80, y: 332, r: 15 };

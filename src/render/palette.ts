@@ -43,19 +43,19 @@ export const R = {
 
 // Tons dédiés au décor.
 export const A = {
-  wall: [col('#05060f'), col('#0a0c1e'), col('#10142b'), col('#191c3a'), col('#26224a'), col('#3a2b58')],
-  floor: [col('#0b0f22'), col('#121a36'), col('#1b2650'), col('#26346a')],
-  floorLine: col('#34478a'),
-  crowd: [col('#0d0b1c'), col('#171330'), col('#231c44')],
+  wall: [col('#0c1030'), col('#141a3c'), col('#141a3c'), col('#141a3c'), col('#141a3c'), col('#141a3c')],
+  floor: [col('#1c63d8'), col('#1c63d8'), col('#1c63d8'), col('#1c63d8')],
+  floorLine: col('#2a74ea'),
+  crowd: [col('#0a0c24'), col('#10143a'), col('#171c4c')],
   crowdRim: col('#3d3366'),
-  shirts: [col('#7a2036'), col('#1f4f7a'), col('#2c6b4a'), col('#8a6a1f'), col('#5a2f7a'), col('#9a4a1c')],
-  faces: [col('#c98a5c'), col('#8a5a3a'), col('#e0b08a')],
+  shirts: [col('#d0343c'), col('#2f7be0'), col('#32b86a'), col('#f2b628'), col('#a050e0'), col('#ff7b2e')],
+  faces: [col('#e8a070'), col('#b87850'), col('#f4c8a0')],
   spotWarm: col('#5a4258'),
   spotWhite: col('#5a587a'),
   spotCool: col('#34588a'),
   bokehWarm: col('#ffb347'),
   bokehCool: col('#6ad4ff'),
   lamp: col('#fff6dd'),
-  emblem: col('#9a7420'),
-  apron: col('#07060d'),
+  emblem: col('#1c63d8'),
+  apron: col('#0e3a9a'),
 };

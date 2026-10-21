@@ -128,8 +128,6 @@ export class Pix {
   }
 }
 
-const BAYER = [0.125, 0.625, 0.875, 0.375];
-const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
 
 // Peinture « à plat » : contour sombre + liseré lumineux/ombré sur les bords (effets, décors).
 export function paint(dst: Pix, mask: Pix, r: Ramp, outline = true): void {
@@ -209,8 +207,7 @@ export function paintVol(dst: Pix, mask: Pix, r: RampV, opts: { outline?: boolea
       const len = Math.hypot(gx, gy, 1);
       const dot = (-gx * LIGHT[0] - gy * LIGHT[1] + LIGHT[2]) / len;
       let v = dot + 0.06 + sideShade * (0.5 - (x + 0.5) / w);
-      v += (bayer(x + x0, y + y0) - 0.5) * 0.11;
-      const tone = v < 0.3 ? r.deep : v < 0.46 ? r.sh : v < 0.74 ? r.base : v < 0.9 ? r.hi : r.spec;
+      const tone = v < 0.36 ? r.sh : v < 0.8 ? r.base : r.hi; // aplats nets, comme un sprite de console 8 bits
       dst.set(x + x0, y + y0, tone);
     }
   }

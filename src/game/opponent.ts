@@ -11,6 +11,7 @@ export class Opponent extends Fighter {
   state: OppState = 'idle';
   timer = 0;
   koT = 0; // temps écoulé depuis le K.O. (animation de chute)
+  guardT = 0; // il lève la garde (le joueur vient de frapper dans ses gants)
   pattern: Pattern | null = null;
   private seqIndex = 0;
   private saved = 0; // temps de récupération restant pendant un état « touché »
@@ -65,6 +66,7 @@ export class Opponent extends Fighter {
 
   update(dt: number): OppEvent[] {
     this.tickFighter(dt);
+    this.guardT = Math.max(0, this.guardT - dt);
     const events: OppEvent[] = [];
     if (this.state === 'ko') {
       this.koT += dt;

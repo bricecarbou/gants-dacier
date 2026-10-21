@@ -282,6 +282,7 @@ export class Game {
       pl.stamina = Math.max(0, pl.stamina - P.blockedPenalty);
       this.audio.play('block');
       this.impact('block', x, y, 'CLANG');
+      o.guardT = 320;
       this.shake(90, 2);
       if (!o.riposting && (o.state === 'idle' || o.state === 'telegraph')) this.riposte(hand);
       return;

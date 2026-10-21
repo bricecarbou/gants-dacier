@@ -167,6 +167,7 @@ const LIGHT = (() => {
 })();
 
 export function paintVol(dst: Pix, mask: Pix, r: RampV, opts: { outline?: boolean; radius?: number; side?: number } = {}): void {
+  if (mask.bx1 < 0) return; // pièce vide (hors du cadre)
   const radius = opts.radius ?? 6;
   const sideShade = opts.side ?? 0.16;
   const x0 = Math.max(0, mask.bx0 - 2);

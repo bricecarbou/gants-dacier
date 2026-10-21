@@ -155,16 +155,7 @@ export class Renderer {
       c.restore();
     };
     const drawOpp = () => {
-      body(flashOpp ? ov.white() : ov.frame, () => {
-        if (o.state === 'idle' && Math.floor(now / 110) % 29 === 0) {
-          for (const x0 of [CX - 16, CX + 9]) {
-            c.fillStyle = '#dc9266';
-            c.fillRect(x0 + ov.pose.hx, 141 + ov.pose.hy, 8, 5);
-            c.fillStyle = '#14101c';
-            c.fillRect(x0 + ov.pose.hx, 143 + ov.pose.hy, 8, 1);
-          }
-        }
-      });
+      body(flashOpp ? ov.white() : ov.frame);
       // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
       if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
         c.save();
@@ -343,7 +334,7 @@ export class Renderer {
     }
     // étoiles qui tournent au-dessus de la tête quand il est sonné ou K.O.
     if (o.state === 'hit' || o.state === 'ko') {
-      const [sx, sy] = oppPt(pose, CX + pose.hx, 112 + pose.hy);
+      const [sx, sy] = oppPt(pose, pose.head[0], pose.head[1] - 36);
       for (let i = 0; i < 4; i++) {
         const a = now / 260 + (i * Math.PI) / 2;
         this.sparkle(p, sx + Math.cos(a) * 34, sy + Math.sin(a) * 9, 5 + (Math.sin(a) > 0 ? 2 : 0), R.burstY);
@@ -358,7 +349,7 @@ export class Renderer {
     }
     // anneau pointillé : l'adversaire est ouvert
     if (o.vulnerable) {
-      const [cx, cy] = oppPt(pose, CX + pose.hx, 146 + pose.hy);
+      const [cx, cy] = oppPt(pose, pose.head[0], pose.head[1]);
       for (let a = 0; a < Math.PI * 2; a += 0.05) {
         if (Math.floor((a + now / 500) * 4) % 2 === 0) p.rect(Math.round(cx + Math.cos(a) * 36), Math.round(cy + Math.sin(a) * 40), 3, 3, Math.floor(now / 120) % 2 ? P.yellow : P.white);
       }

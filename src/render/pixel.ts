@@ -1,0 +1,230 @@
+// Mini moteur de pixel art : palette indexée, primitives sans anticrénelage,
+// et « peinture » automatique d'une pièce (contour + ombrage à plat éclairé en haut à gauche).
+
+export const LW = 180; // résolution interne (pixels) ; la logique de jeu reste en 360x640 (x2)
+export const LH = 320;
+
+export const PAL: string[] = ['#000000'];
+const RGB: number[] = [0, 0, 0];
+
+export function col(hex: string): number {
+  PAL.push(hex);
+  const n = parseInt(hex.slice(1), 16);
+  RGB.push((n >> 16) & 255, (n >> 8) & 255, n & 255);
+  return PAL.length - 1;
+}
+
+export interface Ramp {
+  ol: number; // contour
+  sh: number; // ombre
+  base: number;
+  hi: number; // lumière
+}
+export const ramp = (ol: string, sh: string, base: string, hi: string): Ramp => ({ ol: col(ol), sh: col(sh), base: col(base), hi: col(hi) });
+
+export class Pix {
+  d: Uint8Array;
+  bx0 = 1e9;
+  by0 = 1e9;
+  bx1 = -1;
+  by1 = -1;
+
+  constructor(
+    public w: number,
+    public h: number,
+  ) {
+    this.d = new Uint8Array(w * h);
+  }
+
+  clear(): void {
+    this.d.fill(0);
+    this.bx0 = this.by0 = 1e9;
+    this.bx1 = this.by1 = -1;
+  }
+
+  set(x: number, y: number, i: number): void {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    this.d[y * this.w + x] = i;
+    if (x < this.bx0) this.bx0 = x;
+    if (x > this.bx1) this.bx1 = x;
+    if (y < this.by0) this.by0 = y;
+    if (y > this.by1) this.by1 = y;
+  }
+
+  get(x: number, y: number): number {
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return 0;
+    return this.d[y * this.w + x];
+  }
+
+  rect(x: number, y: number, w: number, h: number, i: number): void {
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) this.set(x + xx, y + yy, i);
+  }
+
+  ellipse(cx: number, cy: number, rx: number, ry: number, i: number): void {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const dx = (x - cx) / (rx + 0.35);
+        const dy = (y - cy) / (ry + 0.35);
+        if (dx * dx + dy * dy <= 1) this.set(x, y, i);
+      }
+    }
+  }
+
+  // Segment épais : on « tamponne » un disque le long de la ligne.
+  line(x0: number, y0: number, x1: number, y1: number, i: number, t = 1): void {
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+    for (let s = 0; s <= n; s++) {
+      const x = x0 + ((x1 - x0) * s) / n;
+      const y = y0 + ((y1 - y0) * s) / n;
+      if (t <= 1) this.set(x, y, i);
+      else this.ellipse(x, y, t / 2 - 0.35, t / 2 - 0.35, i);
+    }
+  }
+
+  poly(pts: [number, number][], i: number): void {
+    let minY = 1e9;
+    let maxY = -1e9;
+    for (const [, y] of pts) {
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+      const yc = y + 0.5;
+      const xs: number[] = [];
+      for (let k = 0; k < pts.length; k++) {
+        const [ax, ay] = pts[k];
+        const [bx, by] = pts[(k + 1) % pts.length];
+        if ((ay <= yc && by > yc) || (by <= yc && ay > yc)) xs.push(ax + ((yc - ay) / (by - ay)) * (bx - ax));
+      }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.round(xs[k]); x < Math.round(xs[k + 1]); x++) this.set(x, y, i);
+    }
+  }
+
+  blit(src: Pix, dx: number, dy: number): void {
+    for (let y = 0; y < src.h; y++) {
+      for (let x = 0; x < src.w; x++) {
+        const v = src.d[y * src.w + x];
+        if (v) this.set(x + dx, y + dy, v);
+      }
+    }
+  }
+}
+
+// Peint la pièce dessinée dans `mask` sur `dst` : contour sombre + ombrage à plat.
+export function paint(dst: Pix, mask: Pix, r: Ramp, outline = true): void {
+  const x0 = Math.max(0, mask.bx0 - 1);
+  const x1 = Math.min(mask.w - 1, mask.bx1 + 1);
+  const y0 = Math.max(0, mask.by0 - 1);
+  const y1 = Math.min(mask.h - 1, mask.by1 + 1);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (!mask.get(x, y)) continue;
+      let tone = r.base;
+      if (!mask.get(x, y + 1) || !mask.get(x + 1, y)) tone = r.sh;
+      else if (!mask.get(x, y - 1) || !mask.get(x - 1, y)) tone = r.hi;
+      else if (!mask.get(x, y + 2) || !mask.get(x + 2, y)) tone = (x + y) & 1 ? r.sh : r.base;
+      dst.set(x, y, tone);
+    }
+  }
+  if (!outline) return;
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (mask.get(x, y)) continue;
+      if (mask.get(x - 1, y) || mask.get(x + 1, y) || mask.get(x, y - 1) || mask.get(x, y + 1)) dst.set(x, y, r.ol);
+    }
+  }
+}
+
+// Détail dessiné seulement là où la pièce existe (lignes d'anatomie, reflets…).
+const scratch = new Map<string, Pix>();
+
+// Détail dessiné seulement là où la pièce existe (lignes d'anatomie, reflets…).
+export function detail(dst: Pix, mask: Pix, draw: (p: Pix) => void, color: number): void {
+  const key = dst.w + 'x' + dst.h;
+  let tmp = scratch.get(key);
+  if (!tmp) scratch.set(key, (tmp = new Pix(dst.w, dst.h)));
+  tmp.clear();
+  draw(tmp);
+  for (let y = tmp.by0; y <= tmp.by1; y++) for (let x = tmp.bx0; x <= tmp.bx1; x++) if (tmp.get(x, y) && mask.get(x, y)) dst.set(x, y, color);
+}
+
+// Bitmap à caractères : '.' vide, lettre = couleur de `map`.
+export function bitmap(dst: Pix, x: number, y: number, rows: string[], map: Record<string, number>): void {
+  rows.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = row[i];
+      if (c !== '.' && map[c] !== undefined) dst.set(x + i, y + j, map[c]);
+    }
+  });
+}
+
+export function mirror(rows: string[]): string[] {
+  return rows.map((r) => [...r].reverse().join(''));
+}
+
+export function toCanvas(p: Pix): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.width = p.w;
+  cv.height = p.h;
+  const c = cv.getContext('2d')!;
+  const img = c.createImageData(p.w, p.h);
+  for (let i = 0; i < p.d.length; i++) {
+    const v = p.d[i];
+    if (!v) continue;
+    img.data[i * 4] = RGB[v * 3];
+    img.data[i * 4 + 1] = RGB[v * 3 + 1];
+    img.data[i * 4 + 2] = RGB[v * 3 + 2];
+    img.data[i * 4 + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+  return cv;
+}
+
+// Version « silhouette blanche » (flash de dégât).
+export function whiteOf(src: HTMLCanvasElement): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.width = src.width;
+  cv.height = src.height;
+  const c = cv.getContext('2d')!;
+  c.drawImage(src, 0, 0);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, cv.width, cv.height);
+  return cv;
+}
+
+// Remplissage en damier (transparence façon 16 bits) : 1 pixel sur 2.
+export function dither(dst: Pix, x0: number, y0: number, w: number, h: number, i: number, phase = 0): void {
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (((x + y + phase) & 1) === 0) dst.set(x, y, i);
+}
+
+// Affiche un calque de pixels indexés par-dessus un contexte (transparence respectée).
+let layerCanvas: HTMLCanvasElement | null = null;
+let layerImg: ImageData | null = null;
+export function drawPix(ctx: CanvasRenderingContext2D, p: Pix): void {
+  if (!layerCanvas || layerCanvas.width !== p.w || layerCanvas.height !== p.h) {
+    layerCanvas = document.createElement('canvas');
+    layerCanvas.width = p.w;
+    layerCanvas.height = p.h;
+    layerImg = layerCanvas.getContext('2d')!.createImageData(p.w, p.h);
+  }
+  const img = layerImg!;
+  const out = img.data;
+  for (let i = 0; i < p.d.length; i++) {
+    const v = p.d[i];
+    const o = i * 4;
+    if (!v) {
+      out[o + 3] = 0;
+      continue;
+    }
+    out[o] = RGB[v * 3];
+    out[o + 1] = RGB[v * 3 + 1];
+    out[o + 2] = RGB[v * 3 + 2];
+    out[o + 3] = 255;
+  }
+  layerCanvas.getContext('2d')!.putImageData(img, 0, 0);
+  ctx.drawImage(layerCanvas, 0, 0);
+}

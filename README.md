@@ -13,4 +13,4 @@ npm run dev      # Node 22.19+ requis
 npm run build
 ```
 
-Univers, personnages et graphismes originaux ; police Bangers (SIL OFL).
+Univers, personnages et graphismes originaux ; police Press Start 2P (SIL OFL), rendu pixel art généré par le code.

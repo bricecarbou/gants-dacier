@@ -1,10 +1,12 @@
-import '@fontsource/bangers/latin-400.css';
+import '@fontsource/press-start-2p/latin-400.css';
 import { Audio } from './audio/audio';
 import { Game } from './game/state';
 import { Input } from './game/input';
 import { startLoop } from './game/loop';
+import { fontLoading } from './render/font';
 import { Renderer } from './render/renderer';
 
+void fontLoading; // lance le chargement de la police pixel dès le démarrage
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const input = new Input(canvas);

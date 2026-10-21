@@ -54,14 +54,17 @@ export class Hud {
     this.oppTrail = g.opponent.hpRatio >= this.oppTrail ? g.opponent.hpRatio : lerp(this.oppTrail, g.opponent.hpRatio, follow * 0.6);
     this.plTrail = g.player.hpRatio >= this.plTrail ? g.player.hpRatio : lerp(this.plTrail, g.player.hpRatio, follow * 0.6);
 
-    pixelText(c, 'BRAZE', 10, 8, { size: 16, color: '#ffd23f' });
-    this.bar(c, 10, 30, 268, 11, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
-
+    // bandeau compact en haut : nom + barre de vie à gauche, round et chrono à droite
+    c.fillStyle = '#0c1030';
+    c.fillRect(0, 0, 288, 34);
+    c.fillStyle = '#ffd23f';
+    c.fillRect(0, 34, 288, 2);
+    pixelText(c, 'BRAZE', 8, 5, { size: 8, color: '#ffd23f', outline: null });
+    this.bar(c, 8, 18, 160, 9, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
     const secs = Math.max(0, Math.ceil(g.roundTimer / 1000));
     const shown = g.phase === 'break' ? g.round - 1 : g.round;
-    box(c, 84, 52, 120, 22, '#1d1530');
-    pixelText(c, `R${shown}`, 90, 56, { size: 16, color: '#ffd23f', outline: null });
-    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 198, 56, { size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff', outline: null }, 'right');
+    pixelText(c, `ROUND ${shown}`, 280, 5, { size: 8, color: '#ffd23f', outline: null }, 'right');
+    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 280, 16,{ size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff', outline: null }, 'right');
 
     pixelText(c, 'NOVA', 10, 466, { size: 16, color: '#7df9ff' });
     this.bar(c, 10, 490, 108, 11, g.player.hpRatio, this.plTrail, g.player.hitFlash > 120);

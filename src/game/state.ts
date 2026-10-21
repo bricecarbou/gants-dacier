@@ -257,7 +257,7 @@ export class Game {
     const pl = this.player;
     const o = this.opponent;
     const x = hand === 'left' ? 160 : 200;
-    const y = target === 'head' ? 190 : 310;
+    const y = target === 'head' ? 232 : 345;
 
     // CONTRE : frapper juste avant l'impact interrompt le coup de l'adversaire
     if (o.counterable(P.counterPunchWindowMs)) {

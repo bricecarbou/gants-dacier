@@ -11,6 +11,48 @@ import { PL_FEET, oppView, playerView } from './sprites';
 const BAYER = [0.125, 0.625, 0.875, 0.375];
 const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
 const CX = LW / 2;
+const OPP_K = 0.84; // l'adversaire est tracé à 84 % de sa taille (proportions de console 8 bits)
+const OPP_PIVOT = 372; // ligne des pieds : point fixe de la mise à l'échelle
+
+// Passe un point du sprite de l'adversaire à l'écran (inclinaison + élan autour du bassin, puis échelle autour des pieds).
+function oppPt(pose: { dx: number; dy: number; sc: number; sh: number }, x: number, y: number): [number, number] {
+  const sx = x - CX;
+  const sy = y - 290;
+  const x1 = CX + pose.dx + pose.sc * (sx - pose.sh * sy);
+  const y1 = 290 + pose.dy + pose.sc * sy;
+  return [CX + OPP_K * (x1 - CX), OPP_PIVOT + OPP_K * (y1 - OPP_PIVOT)];
+}
+
+// Palette limitée (teintes proches d'une console 8 bits) : tout est ramené à ces couleurs.
+const NES = [
+  '#000000', '#14101c', '#3c3c3c', '#7c7c7c', '#bcbcbc', '#f4f0e6', '#ffffff',
+  '#0c1030', '#141a3c', '#1c2880', '#0058f8', '#1c63d8', '#3cbcfc', '#a4e4fc', '#6844fc',
+  '#4428bc', '#6a3a1c', '#84402a', '#a81000', '#d82800', '#f83800', '#fc7460', '#fca044', '#f8b800',
+  '#ffe14d', '#f8d878', '#fce0a8', '#dc9266', '#b0603a', '#e8a070', '#f4c8a0', '#8b5a3a',
+  '#00a800', '#58d854', '#b8f818', '#007800', '#00a844', '#008088', '#2fd0c8', '#7df9ff',
+  '#d800cc', '#f878f8', '#9878f8', '#a050e0', '#5a0f1a', '#c01830', '#ff3b4e', '#ff7b2e',
+].map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)] as const);
+const nesCache = new Map<number, number>();
+function nesColor(r: number, g: number, b: number): number {
+  const key = (r << 16) | (g << 8) | b;
+  let v = nesCache.get(key);
+  if (v === undefined) {
+    let best = 1e9;
+    let bi = 0;
+    for (let i = 0; i < NES.length; i++) {
+      const [pr, pg, pb] = NES[i];
+      const d = (pr - r) * (pr - r) * 0.3 + (pg - g) * (pg - g) * 0.59 + (pb - b) * (pb - b) * 0.11;
+      if (d < best) {
+        best = d;
+        bi = i;
+      }
+    }
+    const [pr, pg, pb] = NES[bi];
+    v = ((255 << 24) | (pb << 16) | (pg << 8) | pr) >>> 0;
+    nesCache.set(key, v);
+  }
+  return v;
+}
 
 function rngf(seed: number): () => number {
   let s = seed >>> 0 || 1;
@@ -25,6 +67,9 @@ export class Renderer {
   private hud = new Hud();
   private lo: HTMLCanvasElement;
   private c: CanvasRenderingContext2D;
+  private world: HTMLCanvasElement;
+  private wc: CanvasRenderingContext2D;
+  private chunkOut = new ImageData(LW, LH);
   private main: CanvasRenderingContext2D;
   private arena = buildArena();
   private back = new Pix(LW, LH);
@@ -39,7 +84,11 @@ export class Renderer {
     this.lo = document.createElement('canvas');
     this.lo.width = LW;
     this.lo.height = LH;
-    this.c = this.lo.getContext('2d')!;
+    this.c = this.lo.getContext('2d', { willReadFrequently: true })!;
+    this.world = document.createElement('canvas');
+    this.world.width = LW;
+    this.world.height = LH;
+    this.wc = this.world.getContext('2d', { willReadFrequently: true })!;
     this.main = canvas.getContext('2d')!;
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -62,7 +111,7 @@ export class Renderer {
   }
 
   draw(now: number, game: Game, input: Input): void {
-    const c = this.c;
+    let c = this.wc;
     const dt = Math.min(100, this.last ? now - this.last : 16);
     this.last = now;
     c.imageSmoothingEnabled = false;
@@ -93,26 +142,29 @@ export class Renderer {
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
     // inclinaison et élan : le corps entier participe au coup (pivot au bassin)
-    const body = (img: HTMLCanvasElement) => {
+    const body = (img: HTMLCanvasElement, extra?: () => void) => {
       c.save();
+      c.translate(CX, OPP_PIVOT);
+      c.scale(OPP_K, OPP_K);
+      c.translate(-CX, -OPP_PIVOT);
       c.translate(CX + ov.pose.dx, 290 + ov.pose.dy);
       c.transform(ov.pose.sc, 0, -ov.pose.sh * ov.pose.sc, ov.pose.sc, 0, 0);
       c.translate(-CX, -290);
       c.drawImage(img, ov.ox, ov.oy);
+      extra?.();
       c.restore();
     };
     const drawOpp = () => {
-      body(flashOpp ? ov.white() : ov.frame);
-      if (o.state === 'idle' && Math.floor(now / 110) % 29 === 0) {
-        const ex = ov.pose.dx + ov.pose.hx;
-        const ey = ov.pose.dy + ov.pose.hy;
-        for (const x0 of [CX - 16, CX + 9]) {
-          c.fillStyle = '#dc9266';
-          c.fillRect(x0 + ex, 141 + ey, 8, 5);
-          c.fillStyle = '#14101c';
-          c.fillRect(x0 + ex, 143 + ey, 8, 1);
+      body(flashOpp ? ov.white() : ov.frame, () => {
+        if (o.state === 'idle' && Math.floor(now / 110) % 29 === 0) {
+          for (const x0 of [CX - 16, CX + 9]) {
+            c.fillStyle = '#dc9266';
+            c.fillRect(x0 + ov.pose.hx, 141 + ov.pose.hy, 8, 5);
+            c.fillStyle = '#14101c';
+            c.fillRect(x0 + ov.pose.hx, 143 + ov.pose.hy, 8, 1);
+          }
         }
-      }
+      });
       // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
       if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
         c.save();
@@ -150,6 +202,10 @@ export class Renderer {
       this.frontEffects(this.front, game, ov, sigColor, now, input);
     }
     drawPix(c, this.front);
+    c.restore();
+    this.chunky();
+    c = this.c;
+    c.imageSmoothingEnabled = false;
 
     if (game.phase === 'menu') {
       this.hud.menu(c, game, now);
@@ -162,8 +218,6 @@ export class Renderer {
       this.hud.floatingTexts(c, game);
       this.hud.overlay(c, game, now);
     }
-    c.restore();
-
     if (game.flashT > 0) {
       c.fillStyle = `rgba(255,255,255,${Math.min(1, game.flashT / 350)})`;
       c.fillRect(0, 0, LW, LH);
@@ -179,6 +233,38 @@ export class Renderer {
     }
     this.main.imageSmoothingEnabled = false;
     this.main.drawImage(this.lo, 0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  // Gros pixels : chaque bloc de 2x2 prend la couleur la plus fréquente (le plus sombre en cas d'égalité, pour garder les
+  // contours), puis la palette est limitée. Le texte et le bandeau sont tracés ensuite, à pleine résolution.
+  private chunky(): void {
+    const src = new Uint32Array(this.wc.getImageData(0, 0, LW, LH).data.buffer);
+    const out = new Uint32Array(this.chunkOut.data.buffer);
+    const lum = (p: number) => (p & 255) * 0.3 + ((p >> 8) & 255) * 0.59 + ((p >> 16) & 255) * 0.11;
+    for (let y = 0; y < LH; y += 2) {
+      for (let x = 0; x < LW; x += 2) {
+        const i = y * LW + x;
+        const a = src[i];
+        const b = src[i + 1];
+        const c2 = src[i + LW];
+        const d = src[i + LW + 1];
+        let pick = a;
+        if (b === c2 || b === d) pick = b;
+        else if (c2 === d) pick = c2;
+        else if (a === b || a === c2 || a === d) pick = a;
+        else {
+          pick = lum(b) < lum(pick) ? b : pick;
+          pick = lum(c2) < lum(pick) ? c2 : pick;
+          pick = lum(d) < lum(pick) ? d : pick;
+        }
+        const q = nesColor(pick & 255, (pick >> 8) & 255, (pick >> 16) & 255);
+        out[i] = q;
+        out[i + 1] = q;
+        out[i + LW] = q;
+        out[i + LW + 1] = q;
+      }
+    }
+    this.c.putImageData(this.chunkOut, 0, 0);
   }
 
   private crowdFlashes(c: CanvasRenderingContext2D, now: number): void {
@@ -247,10 +333,9 @@ export class Renderer {
         for (const idx of pose.glow) {
           const gg = idx === 0 ? pose.gl : pose.gr;
           // même transformation que le sprite (inclinaison + élan autour du bassin)
-          const cx = CX + pose.dx + pose.sc * (gg.x - CX) - pose.sh * pose.sc * (gg.y - 290);
-          const cy = 290 + pose.dy + pose.sc * (gg.y - 290);
+          const [cx, cy] = oppPt(pose, gg.x, gg.y);
           for (let a = 0; a < Math.PI * 2; a += 0.06) {
-            const rr = gg.r * pose.sc + 5 + (Math.floor(a * 7) & 1) * 2;
+            const rr = gg.r * pose.sc * OPP_K + 5 + (Math.floor(a * 7) & 1) * 2;
             p.set(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sigColor);
           }
         }
@@ -258,8 +343,7 @@ export class Renderer {
     }
     // étoiles qui tournent au-dessus de la tête quand il est sonné ou K.O.
     if (o.state === 'hit' || o.state === 'ko') {
-      const sx = CX + pose.dx + pose.hx;
-      const sy = 112 + pose.dy + pose.hy;
+      const [sx, sy] = oppPt(pose, CX + pose.hx, 112 + pose.hy);
       for (let i = 0; i < 4; i++) {
         const a = now / 260 + (i * Math.PI) / 2;
         this.sparkle(p, sx + Math.cos(a) * 34, sy + Math.sin(a) * 9, 5 + (Math.sin(a) > 0 ? 2 : 0), R.burstY);
@@ -274,8 +358,7 @@ export class Renderer {
     }
     // anneau pointillé : l'adversaire est ouvert
     if (o.vulnerable) {
-      const cx = CX + pose.dx + pose.hx;
-      const cy = 146 + pose.dy + pose.hy;
+      const [cx, cy] = oppPt(pose, CX + pose.hx, 146 + pose.hy);
       for (let a = 0; a < Math.PI * 2; a += 0.05) {
         if (Math.floor((a + now / 500) * 4) % 2 === 0) p.rect(Math.round(cx + Math.cos(a) * 36), Math.round(cy + Math.sin(a) * 40), 3, 3, Math.floor(now / 120) % 2 ? P.yellow : P.white);
       }

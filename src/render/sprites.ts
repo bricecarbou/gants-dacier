@@ -549,7 +549,7 @@ const FEET = PL_FEET; // ligne des pieds à l'écran
 const pm = new Pix(LW, PL_H);
 const PL_N1 = 31; // segments du bras de Nova (constants)
 const PL_N2 = 35;
-export const PL_JUMP_HEAD = 78; // hauteur du saut pour viser le visage
+export const PL_JUMP_HEAD = 66; // hauteur du saut pour viser le visage
 
 function plPart(dst: Pix, r: RampV, draw: (m: Pix) => void, post?: (m: Pix) => void, opts?: { radius?: number; side?: number }): void {
   pm.clear();

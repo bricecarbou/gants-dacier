@@ -25,6 +25,10 @@ export function buildArena(): HTMLCanvasElement {
 
 function crowd(p: Pix): void {
   const rows = [
+    { y: 40 * K, r: 3.5, step: 8, tone: 0 },
+    { y: 54 * K, r: 4, step: 9, tone: 0 },
+    { y: 68 * K, r: 4.5, step: 10, tone: 0 },
+    { y: 82 * K, r: 5, step: 11, tone: 0 },
     { y: 92 * K, r: 5, step: 11, tone: 0 },
     { y: 108 * K, r: 6, step: 14, tone: 1 },
     { y: 124 * K, r: 7, step: 17, tone: 2 },

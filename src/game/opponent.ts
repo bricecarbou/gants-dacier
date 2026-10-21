@@ -10,6 +10,7 @@ const O = CONFIG.opponent;
 export class Opponent extends Fighter {
   state: OppState = 'idle';
   timer = 0;
+  koT = 0; // temps écoulé depuis le K.O. (animation de chute)
   pattern: Pattern | null = null;
   private seqIndex = 0;
   private saved = 0; // temps de récupération restant pendant un état « touché »
@@ -42,6 +43,7 @@ export class Opponent extends Fighter {
   }
 
   beginRound(round: number): void {
+    this.koT = 0;
     this.state = 'idle';
     this.pattern = null;
     this.ripostingFlag = false;
@@ -64,7 +66,10 @@ export class Opponent extends Fighter {
   update(dt: number): OppEvent[] {
     this.tickFighter(dt);
     const events: OppEvent[] = [];
-    if (this.state === 'ko') return events;
+    if (this.state === 'ko') {
+      this.koT += dt;
+      return events;
+    }
     this.timer -= dt;
     if (this.timer > 0) return events;
 

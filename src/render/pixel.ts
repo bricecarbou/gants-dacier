@@ -274,6 +274,19 @@ export function whiteOf(src: HTMLCanvasElement): HTMLCanvasElement {
   return cv;
 }
 
+// Silhouette unie d'une couleur (signal de télégraphie qui clignote).
+export function tintOf(src: HTMLCanvasElement, hex: string): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.width = src.width;
+  cv.height = src.height;
+  const c = cv.getContext('2d')!;
+  c.drawImage(src, 0, 0);
+  c.globalCompositeOperation = 'source-in';
+  c.fillStyle = hex;
+  c.fillRect(0, 0, cv.width, cv.height);
+  return cv;
+}
+
 // Remplissage en damier (transparence façon 16 bits) : 1 pixel sur 2.
 export function dither(dst: Pix, x0: number, y0: number, w: number, h: number, i: number, phase = 0): void {
   for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (((x + y + phase) & 1) === 0) dst.set(x, y, i);

@@ -2,7 +2,7 @@ import { CONFIG } from '../config';
 import type { Opponent } from '../game/opponent';
 import type { Player } from '../game/player';
 import { P, R } from './palette';
-import { LH, LW, Pix, bitmap, detail, mirror, paintVol, toCanvas, whiteOf, type RampV } from './pixel';
+import { LH, LW, Pix, bitmap, detail, mirror, paintVol, tintOf, toCanvas, whiteOf, type RampV } from './pixel';
 
 // Personnages 100 % originaux, assemblés pièce par pièce en pixel art : chaque pièce est peinte avec un relief
 // arrondi éclairé en haut à gauche. Les poses sont quantifiées puis mises en cache (animation « par images »).
@@ -37,6 +37,7 @@ export interface OppPose {
   front: -1 | 0 | 1; // bras dessiné en dernier (devant)
   sf: number; // image de la goutte de sueur
   glow: (0 | 1)[]; // gants à mettre en évidence (télégraphie / attaque)
+  blink: boolean; // yeux fermés une fraction de seconde
 }
 
 export interface OppView {
@@ -45,6 +46,7 @@ export interface OppView {
   ap: number;
   frame: HTMLCanvasElement;
   white: HTMLCanvasElement;
+  tint: (hex: string) => HTMLCanvasElement; // silhouette colorée (clignotement des signaux)
 }
 
 // ---------- pose de l'adversaire à partir de son état ----------
@@ -78,9 +80,12 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   const ai: 0 | 1 = s === -1 ? 0 : 1; // index du bras qui frappe
 
   if (o.state === 'hit') {
-    hx = -3;
-    hy = 2;
-    dx = Math.floor(now / 40) % 2 ? 4 : -4;
+    // la tête part en arrière et le corps encaisse, puis revient
+    const rec = clamp01(o.timer / 220);
+    hx = -Math.round(7 * rec);
+    hy = Math.round(4 * rec);
+    dx = (Math.floor(now / 40) % 2 ? 3 : -3) - Math.round(6 * rec);
+    dy = Math.round(5 * rec);
   }
   if (o.state === 'recovery' || o.state === 'hit') {
     gl = { x: CX - 70, y: 296, r: 15 };
@@ -91,10 +96,12 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     gl = { x: CX - 80, y: 332, r: 15 };
     gr = { x: CX + 80, y: 332, r: 15 };
     el = [[CX - 70, 284], [CX + 70, 284]];
-    dx = 0;
-    dy = 54;
-    hx = 4;
-    hy = 11;
+    // il s'affaisse lentement
+    const fall = easeOut(o.koT / 900);
+    dx = Math.round(-4 * fall);
+    dy = 54 + Math.round(58 * fall);
+    hx = 4 + Math.round(4 * fall);
+    hy = 11 + Math.round(10 * fall);
   } else if ((o.state === 'telegraph' || o.state === 'attack') && p) {
     front = s;
     glow = kind === 'uppercut' ? [0, 1] : [ai];
@@ -196,7 +203,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     }
   }
 
-  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow }, tp, ap };
+  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow, blink: expr === 'calm' && Math.floor(now / 110) % 29 === 0 }, tp, ap };
 }
 
 // ---------- construction d'une image de l'adversaire ----------
@@ -320,8 +327,9 @@ function buildOpponent(pose: OppPose): HTMLCanvasElement {
     { radius: 10, side: 0.3 },
   );
   const ink = { '#': P.ink, W: P.paper, P: P.ink, I: P.iris, D: P.dkRed, T: P.tongue, S: P.sweat };
-  bitmap(head, CX - 16, 141, EYES[pose.expr], ink);
-  bitmap(head, CX + 9, 141, mirror(EYES[pose.expr]), ink);
+  const eyes = pose.blink ? ['........', '########', '........'] : EYES[pose.expr];
+  bitmap(head, CX - 16, 141, eyes, ink);
+  bitmap(head, CX + 9, 141, mirror(eyes), ink);
   bitmap(head, CX - 18, 132, BROWS[pose.expr], ink);
   bitmap(head, CX + 9, 132, mirror(BROWS[pose.expr]), ink);
   for (const [x, y] of [[CX + 1, 148], [CX + 1, 149], [CX + 1, 150], [CX + 1, 151], [CX, 152], [CX + 1, 152], [CX - 2, 153], [CX + 3, 153]]) head.set(x, y, P.skinDeep);
@@ -371,7 +379,7 @@ function buildOpponent(pose: OppPose): HTMLCanvasElement {
   return toCanvas(out);
 }
 
-const oppCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasElement }>();
+const oppCache = new Map<string, { frame: HTMLCanvasElement; white: HTMLCanvasElement; tints: Map<string, HTMLCanvasElement> }>();
 
 export function oppView(o: Opponent, now: number): OppView {
   const { pose, tp, ap } = computePose(o, now);
@@ -383,10 +391,16 @@ export function oppView(o: Opponent, now: number): OppView {
   if (!e) {
     if (oppCache.size > 90) oppCache.clear();
     const frame = buildOpponent(pose);
-    e = { frame, white: whiteOf(frame) };
+    e = { frame, white: whiteOf(frame), tints: new Map() };
     oppCache.set(key, e);
   }
-  return { pose, tp, ap, frame: e.frame, white: e.white };
+  const entry = e;
+  const tint = (hex: string) => {
+    let t = entry.tints.get(hex);
+    if (!t) entry.tints.set(hex, (t = tintOf(entry.frame, hex)));
+    return t;
+  };
+  return { pose, tp, ap, frame: e.frame, white: e.white, tint };
 }
 
 /// ---------- joueur vu de dos : petit, au bas de l'écran, comme Mac dans Punch-Out ----------

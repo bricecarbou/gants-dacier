@@ -73,6 +73,7 @@ export class Game {
   shakeT = 0;
   shakeMag = 0;
   flashT = 0;
+  cheerT = 0; // la foule s'agite (contres, super, K.O.)
   hitStop = 0; // arrêt sur image (ms) : donne du poids aux coups
   private pending: Action[] = [];
   record: MatchRecord = loadRecord();
@@ -108,6 +109,7 @@ export class Game {
     this.impacts = this.impacts.filter((i) => i.t < IMPACT_MS);
     this.shakeT = Math.max(0, this.shakeT - dt);
     this.flashT = Math.max(0, this.flashT - dt);
+    this.cheerT = Math.max(0, this.cheerT - dt);
 
     if (this.hitStop > 0) {
       this.hitStop -= dt;
@@ -253,6 +255,7 @@ export class Game {
       this.impact('counter', x, y, upper ? 'PARADE !' : 'CONTRE !');
       this.shake(200, 4);
       this.hitStop = H.counter;
+      this.cheerT = 800;
       this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, '#7df9ff');
       this.gainMeter(upper ? S.uppercutCounterGain : S.counterGain);
       if (r === 'ko') this.endByKo('ko-win');
@@ -293,6 +296,7 @@ export class Game {
     this.shake(380, 8);
     this.hitStop = H.super;
     this.flashT = 200;
+    this.cheerT = 1200;
     this.say(`-${S.damage}`, 220, 160, '#ffe14d');
     if (r === 'ko') this.endByKo('ko-win');
   }
@@ -323,6 +327,7 @@ export class Game {
     this.phase = 'koPause';
     this.phaseTimer = F.koPauseMs;
     this.audio.play('ko');
+    this.cheerT = 2200;
     this.flashT = 350;
     this.shake(500, 12);
   }

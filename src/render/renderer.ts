@@ -72,6 +72,11 @@ export class Renderer {
       c.translate(Math.round((Math.random() - 0.5) * 2 * m), Math.round((Math.random() - 0.5) * 2 * m));
     }
     c.drawImage(this.arena, 0, 0);
+    // la foule saute quand ça chauffe (contre, super, K.O.)
+    if (game.cheerT > 0) {
+      const jump = Math.round(Math.abs(Math.sin(now / 90)) * -4 * Math.min(1, game.cheerT / 500));
+      c.drawImage(this.arena, 0, 100, LW, 130, 0, 100 + jump, LW, 130);
+    }
     this.crowdFlashes(c, now);
 
     const o = game.opponent;
@@ -88,6 +93,13 @@ export class Renderer {
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
     c.drawImage(flashOpp ? ov.white : ov.frame, ov.pose.dx, ov.pose.dy);
+    // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
+    if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
+      c.save();
+      c.globalAlpha = 0.55;
+      c.drawImage(ov.tint(o.pattern.color), ov.pose.dx, ov.pose.dy);
+      c.restore();
+    }
 
     if (game.phase !== 'menu') {
       const pv = playerView(game.player, now);
@@ -208,6 +220,15 @@ export class Renderer {
             p.set(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sigColor);
           }
         }
+      }
+    }
+    // étoiles qui tournent au-dessus de la tête quand il est sonné ou K.O.
+    if (o.state === 'hit' || o.state === 'ko') {
+      const sx = CX + pose.dx + pose.hx;
+      const sy = 112 + pose.dy + pose.hy;
+      for (let i = 0; i < 4; i++) {
+        const a = now / 260 + (i * Math.PI) / 2;
+        this.sparkle(p, sx + Math.cos(a) * 34, sy + Math.sin(a) * 9, 5 + (Math.sin(a) > 0 ? 2 : 0), R.burstY);
       }
     }
     // anneau pointillé : l'adversaire est ouvert

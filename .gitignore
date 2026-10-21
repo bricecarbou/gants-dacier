@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Matériel d'étude local (ROM d'un jeu commercial) : ne jamais publier
+analyse/
+*.nes
+*.zip

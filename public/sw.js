@@ -1,6 +1,6 @@
 // Service worker : précache de l'app au premier chargement, puis cache d'abord (hors-ligne),
 // avec mise à jour en arrière-plan. Incrémenter CACHE pour forcer le renouvellement.
-const CACHE = 'boxe-v7';
+const CACHE = 'boxe-v8';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -42,6 +42,16 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);
+      // Page d'entrée : réseau d'abord (nouvelle version dès l'ouverture), cache seulement hors-ligne.
+      if (req.mode === 'navigate') {
+        try {
+          const res = await fetch(req, { cache: 'no-cache' });
+          if (res.ok) cache.put(req, res.clone());
+          return res;
+        } catch {
+          return (await cache.match(req, { ignoreSearch: true, ignoreVary: true })) || (await cache.match('./index.html')) || Response.error();
+        }
+      }
       // ignoreVary : les scripts module envoient un en-tête Origin absent des requêtes de précache.
       const hit = await cache.match(req, { ignoreSearch: true, ignoreVary: true });
       const net = fetch(req)

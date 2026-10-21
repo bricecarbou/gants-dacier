@@ -197,15 +197,24 @@ export class Hud {
     const lines = pad ? ['CROIX: ESQUIVE', 'POING: CORPS', 'HAUT+POING: TETE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: RECUL', 'TAP: FRAPPER'];
     const cols = pad ? ['#7df9ff', '#ffd23f', '#ffd23f'] : ['#7df9ff', '#7df9ff', '#ffd23f'];
     lines.forEach((t, i) => pixelText(c, t, MID, 329 + i * 19, { size: 16, color: cols[i], outline: null }, 'center'));
-    // bouton de choix du mode de commandes
+    // choix du mode de commandes : deux onglets
     const mb = CONFIG.input.modeButton;
     const bx = Math.round(mb.x * LS);
     const by = Math.round(mb.y * LS);
-    box(c, bx, by, Math.round(mb.w * LS), Math.round(mb.h * LS), '#2a1a55');
-    c.fillStyle = '#7a5cff';
-    c.fillRect(bx, by, Math.round(mb.w * LS), 3);
-    pixelText(c, pad ? 'MODE: CROIX' : 'MODE: SWIPE', MID, by + 9, { size: 16, color: '#ffffff', outline: null }, 'center');
-    pixelText(c, 'TOUCHE POUR CHANGER', MID, by + Math.round(mb.h * LS) + 8, { size: 8, color: '#8d88a8', outline: null }, 'center');
+    const bw = Math.round(mb.w * LS);
+    const bh = Math.round(mb.h * LS);
+    pixelText(c, 'COMMANDES', MID, by - 14, { size: 8, color: '#8d88a8', outline: null }, 'center');
+    ([['SWIPE', false], ['CROIX', true]] as const).forEach(([label, isPad], i) => {
+      const on = pad === isPad;
+      const w = Math.floor(bw / 2) - 2;
+      const x = bx + i * (w + 4);
+      box(c, x, by, w, bh, on ? '#7a5cff' : '#1d1530');
+      if (on) {
+        c.fillStyle = '#b9a8ff';
+        c.fillRect(x, by, w, 3);
+      }
+      pixelText(c, label, x + w / 2, by + 9, { size: 16, color: on ? '#ffffff' : '#6d6890', outline: null }, 'center');
+    });
     if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 470, { size: 16, color: '#ffffff' }, 'center');
     pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 496, { size: 16, color: '#8d88a8', outline: null }, 'center');
   }

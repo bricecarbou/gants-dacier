@@ -38,9 +38,9 @@ interface Gesture {
 
 function loadMode(): ControlMode {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'pad' ? 'pad' : 'swipe';
+    return localStorage.getItem(STORAGE_KEY) === 'swipe' ? 'swipe' : 'pad'; // croix par défaut
   } catch {
-    return 'swipe';
+    return 'pad';
   }
 }
 
@@ -83,7 +83,7 @@ export class Input {
       const mb = CONFIG.input.modeButton;
       if (this.inMenu && p.x >= mb.x && p.x <= mb.x + mb.w && p.y >= mb.y && p.y <= mb.y + mb.h) {
         g.done = true;
-        this.toggleMode();
+        this.setMode(p.x < mb.x + mb.w / 2 ? 'swipe' : 'pad');
         return;
       }
       if (this.mode === 'pad') this.padDown(g, p.x, p.y);
@@ -149,8 +149,9 @@ export class Input {
     });
   }
 
-  toggleMode(): void {
-    this.mode = this.mode === 'swipe' ? 'pad' : 'swipe';
+  setMode(mode: ControlMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
     this.gestures.clear();
     this.refreshHeld();
     try {

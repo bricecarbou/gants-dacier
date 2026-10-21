@@ -17,7 +17,7 @@ interface G {
 }
 
 const CX = LW / 2;
-const OPP_H = 384;
+const OPP_H = 512;
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const q = (v: number, n: number) => Math.round(v * n) / n;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -38,7 +38,9 @@ export interface OppPose {
   front: -1 | 0 | 1; // bras dessiné en dernier (devant)
   sf: number; // image de la goutte de sueur
   glow: (0 | 1)[]; // gants à mettre en évidence (télégraphie / attaque)
-  blink: boolean; // yeux fermés une fraction de seconde
+  ll: number; // pied gauche levé (px)
+  lr: number; // pied droit levé (px)
+  kb: number; // flexion des genoux
 }
 
 export interface OppView {
@@ -55,9 +57,9 @@ export interface OppView {
 // Position d'arrivée du gant, du coude et du corps à la fin du coup (sert au retour progressif en garde).
 function strikeEnd(p: Pattern): { g: G; el: Pt; dx: number; dy: number } {
   const s = p.side === 'left' ? -1 : 1;
-  if (p.kind === 'direct') return { g: { x: CX + s * 14, y: 332, r: 38 }, el: [CX + s * 42, 270], dx: s * 20, dy: 22 };
-  if (p.kind === 'hook') return { g: { x: CX - s * 6, y: 296, r: 38 }, el: [CX + s * 34, 270], dx: s * 28, dy: 16 };
-  return { g: { x: CX + s * 6, y: 262, r: 42 }, el: [CX + s * 44, 300], dx: s * 20, dy: -10 };
+  if (p.kind === 'direct') return { g: { x: CX + s * 12, y: 418, r: 54 }, el: [CX + s * 40, 330], dx: s * 20, dy: 22 };
+  if (p.kind === 'hook') return { g: { x: CX - s * 6, y: 404, r: 52 }, el: [CX + s * 30, 322], dx: s * 28, dy: 16 };
+  return { g: { x: CX + s * 4, y: 392, r: 54 }, el: [CX + s * 40, 332], dx: s * 20, dy: -10 };
 }
 
 // ---------- pose de l'adversaire à partir de son état ----------
@@ -76,12 +78,19 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
   else if (o.state === 'hit') expr = 'hurt';
   else if (o.state === 'ko') expr = 'ko';
 
-  // garde vivante : léger déplacement latéral lent, rebond sur les appuis, tête qui suit avec retard, gants qui alternent
+  // garde vivante, comme les boxeurs de la NES : une boucle de 8 poses (genoux qui fléchissent, pieds qui se lèvent
+  // à tour de rôle, gants et tête qui suivent le rythme) en plus d'un léger déplacement latéral
+  const BOUNCE = [[0, 0, 0, 0, 0], [4, 0, 2, 1, -1], [8, 0, 3, 1, -2], [4, 0, 2, 0, -1], [0, 0, 0, 0, 0], [0, 4, 2, 1, 1], [0, 8, 3, 1, 2], [0, 4, 2, 0, 1]];
+  const [bl, br, bk, bg, bh] = BOUNCE[Math.floor(now / 110) % 8];
+  const idle = o.state === 'idle';
+  let ll = idle ? bl : 0;
+  let lr = idle ? br : 0;
+  let kb = idle ? bk : 0;
+  const gb = idle ? bg : 0;
   let dx = Math.round(14 * Math.sin(t * 1.3));
-  let dy = Math.round(3 * Math.sin(t * 6.0));
-  let hx = -Math.round(dx * 0.35);
-  let hy = dy > 0 ? 1 : 0;
-  const gb = Math.floor(now / 260) % 2;
+  let dy = Math.round(3 * Math.sin(t * 6.0)) + (kb >= 3 ? 2 : 0);
+  let hx = idle ? bh : 0;
+  let hy = idle && kb >= 2 ? 1 : 0;
   let gl: G = { x: CX - 24, y: 176 + (gb ? 2 : -1), r: 14 };
   let gr: G = { x: CX + 24, y: 176 + (gb ? -1 : 2), r: 14 };
   let el: [Pt, Pt] = [[CX - 48, 238], [CX + 48, 238]];
@@ -134,8 +143,8 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     if (kind === 'direct') {
       const wind: G = { x: CX + s * 54, y: 204, r: 15 };
       const wEl: Pt = [CX + s * 66, 244];
-      const hit: G = { x: CX + s * 14, y: 332, r: 38 };
-      const hEl: Pt = [CX + s * 42, 270];
+      const hit: G = { x: CX + s * 12, y: 418, r: 54 };
+      const hEl: Pt = [CX + s * 40, 330];
       if (o.state === 'telegraph') {
         const k = easeOut(tp);
         pos = lerpG(guard, wind, k);
@@ -154,8 +163,8 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     } else if (kind === 'hook') {
       const wind: G = { x: CX + s * 96, y: 152, r: 16 };
       const wEl: Pt = [CX + s * 84, 198];
-      const end: G = { x: CX - s * 6, y: 296, r: 38 };
-      const hEl: Pt = [CX + s * 34, 270];
+      const end: G = { x: CX - s * 6, y: 404, r: 52 };
+      const hEl: Pt = [CX + s * 30, 322];
       const arc = (k: number): G => {
         const g = lerpG(wind, end, k);
         return { ...g, x: Math.round(g.x + s * 34 * Math.sin(k * Math.PI)) };
@@ -179,7 +188,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
       // remontant : on s'accroupit, les deux gants plongent, puis le gant frappeur remonte
       const lowA: G = { x: CX + s * 34, y: 332, r: 16 };
       const lowO: G = { x: CX - s * 30, y: 324, r: 15 };
-      const topA: G = { x: CX + s * 6, y: 262, r: 42 };
+      const topA: G = { x: CX + s * 4, y: 392, r: 54 };
       const oi: 0 | 1 = ai === 0 ? 1 : 0;
       const elA: Pt = [CX + s * 52, 296];
       const elO: Pt = [CX - s * 52, 290];
@@ -199,7 +208,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
         dx = 0;
       } else {
         const k = easeOut(ap);
-        put(lerpG(lowA, topA, k), lerpP(elA, [CX + s * 44, 300], k));
+        put(lerpG(lowA, topA, k), lerpP(elA, [CX + s * 40, 332], k));
         if (oi === 0) {
           gl = lowO;
           el = [elO, el[1]];
@@ -212,6 +221,15 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
         for (const d of [0.25, 0.5]) trail.push({ side: ai, ...lerpG(lowA, topA, Math.max(0, k - d)) });
       }
     }
+  }
+
+  // jambes : genoux pliés quand il se prépare, pas en avant du côté qui frappe
+  if (o.state === 'telegraph') kb = 3;
+  else if (o.state === 'recovery') kb = 2;
+  else if (o.state === 'attack' && p) {
+    kb = 1;
+    if (ai === 0) ll = 6;
+    else lr = 6;
   }
 
   // après le coup, le gant et le corps reviennent doucement vers la garde basse
@@ -235,7 +253,7 @@ function computePose(o: Opponent, now: number): { pose: OppPose; tp: number; ap:
     }
   }
 
-  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow, blink: expr === 'calm' && Math.floor(now / 110) % 29 === 0 }, tp, ap };
+  return { pose: { expr, dx, dy, hx, hy, gl, gr, el, trail, front, sf: Math.floor(now / 320) % 2, glow, ll, lr, kb }, tp, ap };
 }
 
 // ---------- construction d'une image de l'adversaire ----------
@@ -306,8 +324,15 @@ function buildOpponent(pose: OppPose): { canvas: HTMLCanvasElement; x: number; y
 
   // jambes + chaussures
   for (const s of [-1, 1]) {
-    part(body, sk, (m) => m.line(CX + s * 20, 322, CX + s * 24, 358, 1, 24), undefined, { radius: 10 });
-    part(body, R.shoe, (m) => m.ellipse(CX + s * 27, 366, 18, 8, 1), (m) => detail(body, m, (t) => t.line(CX + s * 27 - 16, 371, CX + s * 27 + 16, 371, 1), P.paper), { radius: 6 });
+    const lift = s === -1 ? pose.ll : pose.lr;
+    const fx = CX + s * 27;
+    const fy = 366 - lift;
+    const kx = CX + s * (24 + pose.kb);
+    part(body, sk, (m) => {
+      m.line(CX + s * 20, 322, kx, 344, 1, 24);
+      m.line(kx, 344, fx, fy - 6, 1, 22);
+    }, undefined, { radius: 10 });
+    part(body, R.shoe, (m) => m.ellipse(fx, fy, 18, 8, 1), (m) => detail(body, m, (t) => t.line(fx - 16, fy + 5, fx + 16, fy + 5, 1), P.paper), { radius: 6 });
   }
   // short + ceinture
   part(
@@ -359,7 +384,7 @@ function buildOpponent(pose: OppPose): { canvas: HTMLCanvasElement; x: number; y
     { radius: 10, side: 0.3 },
   );
   const ink = { '#': P.ink, W: P.paper, P: P.ink, I: P.iris, D: P.dkRed, T: P.tongue, S: P.sweat };
-  const eyes = pose.blink ? ['........', '########', '........'] : EYES[pose.expr];
+  const eyes = EYES[pose.expr];
   bitmap(head, CX - 16, 141, eyes, ink);
   bitmap(head, CX + 9, 141, mirror(eyes), ink);
   bitmap(head, CX - 18, 132, BROWS[pose.expr], ink);
@@ -576,7 +601,7 @@ function buildPlayer(pose: PlPose): { canvas: HTMLCanvasElement; x: number; y: n
     } else if (pose.hand === hand) {
       const tx = hand === 'left' ? CX - 12 : CX + 12;
       const ty = (pose.target === 'head' ? 150 : 250) - PL_Y0;
-      const dest: G = { x: tx, y: ty, r: 7 };
+      const dest: G = { x: tx, y: ty, r: 11 };
       g = lerpG(guard, dest, pose.k);
       for (const d of [0.3, 0.55]) plGlove(out, lerpG(guard, dest, Math.max(0, pose.k - d)), e, s === -1 ? 1 : -1, true);
     }
@@ -599,7 +624,8 @@ const plCache = new Map<string, PlEntry>();
 
 export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement; white: () => HTMLCanvasElement; ox: number; oy: number; x: number; y: number } {
   const a = pl.punchAnim;
-  const kRaw = a ? Math.sin(clamp01(a.t / CONFIG.player.punchAnimMs) * Math.PI) : 0;
+  const u = a ? clamp01(a.t / CONFIG.player.punchAnimMs) : 0;
+  const kRaw = !a ? 0 : u < 0.43 ? easeOut(u / 0.43) : u < 0.62 ? 1 : 1 - (u - 0.62) / 0.38;
   const sa = pl.superAnim;
   const pose: PlPose = {
     ox: 0,
@@ -619,14 +645,15 @@ export function playerView(pl: Player, now: number): { frame: HTMLCanvasElement;
     plCache.set(key, e);
   }
   const entry = e;
-  const hurt = pl.stun > 0 ? Math.round(6 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
+  const hurt = pl.stun > 0 ? Math.round(14 * Math.min(1, pl.stun / CONFIG.player.hitStunMs)) : 0;
+  const shake = pl.stun > 0 ? (Math.floor(now / 40) % 2 ? 4 : -4) : 0; // Nova encaisse : il est secoué
   const sway = Math.round(2 * Math.sin(now / 480)); // léger balancement de garde
   return {
     frame: e.frame,
     white: () => (entry.white ??= whiteOf(entry.frame)),
     ox: e.ox,
     oy: e.oy,
-    x: Math.round(pl.dodgeOffset * 0.8) + sway,
+    x: Math.round(pl.dodgeOffset * 0.8) + sway + shake,
     y: PL_Y0 + hurt + Math.round(10 * pl.backAmount),
   };
 }
@@ -636,11 +663,11 @@ export function prewarmFrames(): void {
   const o = new Opponent();
   const pl = new Player();
   const jobs: (() => void)[] = [];
-  for (let i = 0; i < 26; i++)
+  for (let i = 0; i < 8; i++)
     jobs.push(() => {
       o.state = 'idle';
       o.pattern = null;
-      oppView(o, i * 200);
+      oppView(o, i * 110 + 1);
     });
   for (const p of PATTERNS) {
     for (let i = 0; i <= 6; i++) {

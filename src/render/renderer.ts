@@ -92,22 +92,39 @@ export class Renderer {
     drawPix(c, this.back);
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-    c.drawImage(flashOpp ? ov.white() : ov.frame, ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
-    // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
-    if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
-      c.save();
-      c.globalAlpha = 0.55;
-      c.drawImage(ov.tint(o.pattern.color), ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
-      c.restore();
-    }
-
-    if (game.phase !== 'menu') {
+    const drawOpp = () => {
+      c.drawImage(flashOpp ? ov.white() : ov.frame, ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
+      if (o.state === 'idle' && Math.floor(now / 110) % 29 === 0) {
+        const ex = ov.pose.dx + ov.pose.hx;
+        const ey = ov.pose.dy + ov.pose.hy;
+        for (const x0 of [CX - 16, CX + 9]) {
+          c.fillStyle = '#dc9266';
+          c.fillRect(x0 + ex, 141 + ey, 8, 5);
+          c.fillStyle = '#14101c';
+          c.fillRect(x0 + ex, 143 + ey, 8, 1);
+        }
+      }
+      // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
+      if (o.state === 'telegraph' && o.pattern && ov.tp >= 0.6 && Math.floor(now / 60) % 2 === 0) {
+        c.save();
+        c.globalAlpha = 0.55;
+        c.drawImage(ov.tint(o.pattern.color), ov.pose.dx + ov.ox, ov.pose.dy + ov.oy);
+        c.restore();
+      }
+    };
+    const drawPl = () => {
+      if (game.phase === 'menu') return;
       const pv = playerView(game.player, now);
       const flash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-      c.save();
-      c.globalAlpha = 1;
       c.drawImage(flash ? pv.white() : pv.frame, pv.x + pv.ox, pv.y + pv.oy);
-      c.restore();
+    };
+    // quand le gant adverse arrive sur Nova, il passe devant lui : on le voit vraiment le toucher
+    if (o.state === 'attack' && ov.ap >= 0.5) {
+      drawPl();
+      drawOpp();
+    } else {
+      drawOpp();
+      drawPl();
     }
 
     this.front.clear();
@@ -229,6 +246,13 @@ export class Renderer {
       for (let i = 0; i < 4; i++) {
         const a = now / 260 + (i * Math.PI) / 2;
         this.sparkle(p, sx + Math.cos(a) * 34, sy + Math.sin(a) * 9, 5 + (Math.sin(a) > 0 ? 2 : 0), R.burstY);
+      }
+    }
+    // Nova sonné : étoiles rouges au-dessus de la tête
+    if (g.player.stun > 0) {
+      for (let i = 0; i < 4; i++) {
+        const a = now / 200 + (i * Math.PI) / 2;
+        this.sparkle(p, CX + Math.cos(a) * 20, 388 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), R.burstR);
       }
     }
     // anneau pointillé : l'adversaire est ouvert

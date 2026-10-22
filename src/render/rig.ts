@@ -1,5 +1,3 @@
-import { Pix } from './pixel';
-
 // Outils de « marionnette » : un personnage est un squelette (bassin, buste, tête, bras et jambes à longueur fixe)
 // dont chaque pièce est une forme vectorielle transformée, puis peinte en pixels (contour + ombrage dessin animé).
 
@@ -88,14 +86,4 @@ export function ellPts(xf: Xf, cx: number, cy: number, rx: number, ry: number, n
     out.push(xf.p(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry));
   }
   return out;
-}
-
-// Segment épais à largeur variable (cuisse, bras...), bouts arrondis.
-export function capsule(m: Pix, a: Pt, b: Pt, ra: number, rb: number): void {
-  const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 1.5));
-  for (let i = 0; i <= n; i++) {
-    const k = i / n;
-    const r = lerp(ra, rb, k);
-    m.ellipse(lerp(a[0], b[0], k), lerp(a[1], b[1], k), r, r, 1);
-  }
 }

@@ -1,57 +1,24 @@
 import { CONFIG } from '../config';
 import type { Input } from '../game/input';
 import type { Game } from '../game/state';
-import { buildArena } from './arena';
+import { buildArena } from './arenaVec';
 import { pixelText } from './font';
 import { Hud } from './hud';
-import { P, R } from './palette';
-import { LH, LS, LW, Pix, drawPix, paint, type Ramp } from './pixel';
-import { PL_FEET, oppView, playerView } from './sprites';
+import { drawOpponent } from './oppDraw';
+import { type OppPose, computePose } from './oppPose';
+import { PL_FEET, drawPlayer, playerState } from './plDraw';
+import { LH, LS, LW } from './view';
+import { type Ctx, mix, starPath } from './vec';
 
-const BAYER = [0.125, 0.625, 0.875, 0.375];
-const bayer = (x: number, y: number) => BAYER[(y & 1) * 2 + (x & 1)];
 const CX = LW / 2;
-const OPP_K = 0.76; // l'adversaire est tracé à 76 % de sa taille (proportions de console 8 bits : environ 40 % de la hauteur de l'écran)
+const OPP_K = 0.76; // l'adversaire est tracé à 76 % de sa taille (environ 40 % de la hauteur de l'écran)
 const OPP_PIVOT = 372; // ligne des pieds : point fixe de la mise à l'échelle
 
-// Passe un point du sprite de l'adversaire à l'écran (inclinaison + élan autour du bassin, puis échelle autour des pieds).
-function oppPt(pose: { dx: number; dy: number; sc: number; sh: number }, x: number, y: number): [number, number] {
-  const sx = x - CX;
-  const sy = y - 290;
-  const x1 = CX + pose.dx + pose.sc * (sx - pose.sh * sy);
-  const y1 = 290 + pose.dy + pose.sc * sy;
+// Passe un point du sprite de l'adversaire à l'écran (élan autour du bassin, puis échelle autour des pieds).
+function oppPt(pose: { dx: number; dy: number; sc: number }, x: number, y: number): [number, number] {
+  const x1 = CX + pose.dx + pose.sc * (x - CX);
+  const y1 = 290 + pose.dy + pose.sc * (y - 290);
   return [CX + OPP_K * (x1 - CX), OPP_PIVOT + OPP_K * (y1 - OPP_PIVOT)];
-}
-
-// Palette limitée (teintes proches d'une console 8 bits) : tout est ramené à ces couleurs.
-const NES = [
-  '#000000', '#14101c', '#3c3c3c', '#7c7c7c', '#bcbcbc', '#f4f0e6', '#ffffff',
-  '#0c1030', '#141a3c', '#1c2880', '#0058f8', '#1c63d8', '#3cbcfc', '#a4e4fc', '#6844fc',
-  '#4428bc', '#6a3a1c', '#84402a', '#a81000', '#d82800', '#f83800', '#fc7460', '#fca044', '#f8b800',
-  '#ffe14d', '#f8d878', '#fce0a8', '#dc9266', '#b0603a', '#e8a070', '#f4c8a0', '#8b5a3a',
-  '#00a800', '#58d854', '#b8f818', '#007800', '#00a844', '#008088', '#2fd0c8', '#7df9ff',
-  '#d800cc', '#f878f8', '#9878f8', '#a050e0', '#5a0f1a', '#c01830', '#ff3b4e', '#ff7b2e',
-].map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)] as const);
-const nesCache = new Map<number, number>();
-function nesColor(r: number, g: number, b: number): number {
-  const key = (r << 16) | (g << 8) | b;
-  let v = nesCache.get(key);
-  if (v === undefined) {
-    let best = 1e9;
-    let bi = 0;
-    for (let i = 0; i < NES.length; i++) {
-      const [pr, pg, pb] = NES[i];
-      const d = (pr - r) * (pr - r) * 0.3 + (pg - g) * (pg - g) * 0.59 + (pb - b) * (pb - b) * 0.11;
-      if (d < best) {
-        best = d;
-        bi = i;
-      }
-    }
-    const [pr, pg, pb] = NES[bi];
-    v = ((255 << 24) | (pb << 16) | (pg << 8) | pr) >>> 0;
-    nesCache.set(key, v);
-  }
-  return v;
 }
 
 function rngf(seed: number): () => number {
@@ -62,39 +29,31 @@ function rngf(seed: number): () => number {
   };
 }
 
-// Rendu en pixels : tout est dessiné dans un tampon 288x512 puis agrandi sans lissage.
+const SIG: Record<string, string> = { jab: '#ffd23f', direct: '#ffd23f', hook: '#ff8a2e', overhand: '#ff8a2e', bodyhook: '#ff3b8a', uppercut: '#ff3b4e' };
+
+// Rendu vectoriel : tout est dessiné directement à la résolution de l'écran (aucune image pré-calculée), donc le mouvement est continu.
 export class Renderer {
   private hud = new Hud();
-  private lo: HTMLCanvasElement;
   private c: CanvasRenderingContext2D;
-  private world: HTMLCanvasElement;
-  private wc: CanvasRenderingContext2D;
-  private chunkOut = new ImageData(LW, LH);
-  private main: CanvasRenderingContext2D;
-  private arena = buildArena();
-  private back = new Pix(LW, LH);
-  private front = new Pix(LW, LH);
-  private mask = new Pix(LW, LH);
+  private k = 1;
+  private arena: HTMLCanvasElement;
+  private tmp: HTMLCanvasElement;
+  private tc: CanvasRenderingContext2D;
   private last = 0;
   private frames = 0;
   private fpsTimer = 0;
   private fps = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
-    this.lo = document.createElement('canvas');
-    this.lo.width = LW;
-    this.lo.height = LH;
-    this.c = this.lo.getContext('2d', { willReadFrequently: true })!;
-    this.world = document.createElement('canvas');
-    this.world.width = LW;
-    this.world.height = LH;
-    this.wc = this.world.getContext('2d', { willReadFrequently: true })!;
-    this.main = canvas.getContext('2d')!;
+    this.c = canvas.getContext('2d')!;
+    this.tmp = document.createElement('canvas');
+    this.tc = this.tmp.getContext('2d')!;
+    this.arena = buildArena(1);
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
 
-  // Letterboxing ; le tampon visible est un multiple entier du tampon interne pour des pixels nets.
+  // Letterboxing ; le tampon est à la résolution réelle de l'écran pour des traits nets.
   resize(): void {
     const { width: W, height: H } = CONFIG.view;
     const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
@@ -105,111 +64,129 @@ export class Renderer {
     s.height = `${h}px`;
     s.left = `${Math.floor((window.innerWidth - w) / 2)}px`;
     s.top = `${Math.floor((window.innerHeight - h) / 2)}px`;
-    const k = Math.max(1, Math.round((w * (window.devicePixelRatio || 1)) / LW));
-    this.canvas.width = LW * k;
-    this.canvas.height = LH * k;
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    this.k = Math.max(1, (w * dpr) / LW);
+    this.canvas.width = Math.round(LW * this.k);
+    this.canvas.height = Math.round(LH * this.k);
+    this.tmp.width = this.canvas.width;
+    this.tmp.height = this.canvas.height;
+    this.arena = buildArena(this.k);
+  }
+
+  // Dessine `draw` sur un calque à part, le teinte (blanc de dégât, couleur du signal) puis le pose sur l'écran.
+  private tinted(c: Ctx, draw: (t: Ctx) => void, color: string, alpha: number, glow = 0): void {
+    const t = this.tc;
+    t.setTransform(1, 0, 0, 1, 0, 0);
+    t.clearRect(0, 0, this.tmp.width, this.tmp.height);
+    t.setTransform(this.k, 0, 0, this.k, 0, 0);
+    t.imageSmoothingEnabled = true;
+    draw(t);
+    t.globalCompositeOperation = 'source-atop';
+    t.fillStyle = color;
+    t.fillRect(0, 0, LW, LH);
+    t.globalCompositeOperation = 'source-over';
+    c.save();
+    if (glow > 0) {
+      c.shadowColor = color;
+      c.shadowBlur = glow * this.k;
+    }
+    c.globalAlpha = alpha;
+    c.drawImage(this.tmp, 0, 0, LW, LH);
+    c.restore();
+  }
+
+  // Temps restant avant l'impact du coup en cours (ms), ou une grande valeur s'il n'y en a pas.
+  private toImpact(o: Game['opponent']): number {
+    if (!o.pattern) return 1e9;
+    if (o.state === 'telegraph') return o.timer + o.pattern.attackMs;
+    if (o.state === 'attack') return o.timer;
+    return 1e9;
   }
 
   draw(now: number, game: Game, input: Input): void {
-    let c = this.wc;
+    const c = this.c;
     const dt = Math.min(100, this.last ? now - this.last : 16);
     this.last = now;
-    c.imageSmoothingEnabled = false;
+    c.setTransform(this.k, 0, 0, this.k, 0, 0);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
     c.save();
     if (game.shakeT > 0) {
       const m = game.shakeMag * LS * Math.min(1, game.shakeT / 200);
-      c.translate(Math.round((Math.random() - 0.5) * 2 * m), Math.round((Math.random() - 0.5) * 2 * m));
+      c.translate((Math.random() - 0.5) * 2 * m, (Math.random() - 0.5) * 2 * m);
     }
-    c.drawImage(this.arena, 0, 0);
+    c.drawImage(this.arena, 0, 0, LW, LH);
     // la foule saute quand ça chauffe (contre, super, K.O.)
     if (game.cheerT > 0) {
-      const jump = Math.round(Math.abs(Math.sin(now / 90)) * -4 * Math.min(1, game.cheerT / 500));
-      c.drawImage(this.arena, 0, 100, LW, 130, 0, 100 + jump, LW, 130);
+      const jump = Math.abs(Math.sin(now / 90)) * -4 * Math.min(1, game.cheerT / 500);
+      c.drawImage(this.arena, 0, 100 * this.k, LW * this.k, 130 * this.k, 0, 100 + jump, LW, 130);
     }
     this.crowdFlashes(c, now);
 
     const o = game.opponent;
-    const ov = oppView(o, now);
-    const sigColor = o.pattern ? (o.pattern.kind === 'direct' || o.pattern.kind === 'jab' ? P.yellow : o.pattern.kind === 'hook' || o.pattern.kind === 'overhand' ? P.orange : P.red) : P.yellow;
+    const { pose, tp } = computePose(o, now, o.guardT > 0);
+    const sigColor = o.pattern ? SIG[o.pattern.kind] ?? '#ffd23f' : '#ffd23f';
+    const cue = o.pattern ? this.toImpact(o) <= CONFIG.opponent.cueMs : false;
 
-    // calque arrière : aura de télégraphie, lignes de vitesse d'attaque, lignes du super
-    this.back.clear();
+    // calque arrière : aura de télégraphie, lignes de vitesse du super
     if (game.phase !== 'menu') {
-      if (o.state === 'telegraph') this.aura(this.back, ov.tp, sigColor, now);
-      if (game.player.superAnim) this.speed(this.back, Math.floor(now / 45) + 99, P.cyan);
+      if (o.state === 'telegraph') this.aura(c, tp, sigColor, now);
+      if (game.player.superAnim) this.speed(c, Math.floor(now / 45) + 99, '#7df9ff');
     }
-    drawPix(c, this.back);
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-    // inclinaison et élan : le corps entier participe au coup (pivot au bassin)
-    const body = (img: HTMLCanvasElement, extra?: () => void) => {
-      c.save();
-      c.translate(CX, OPP_PIVOT);
-      c.scale(OPP_K, OPP_K);
-      c.translate(-CX, -OPP_PIVOT);
-      c.translate(CX + ov.pose.dx, 290 + ov.pose.dy);
-      c.transform(ov.pose.sc, 0, -ov.pose.sh * ov.pose.sc, ov.pose.sc, 0, 0);
-      c.translate(-CX, -290);
-      c.drawImage(img, ov.ox, ov.oy);
-      extra?.();
-      c.restore();
+    const drawOpp = (t: Ctx) => this.withOpp(t, pose, () => drawOpponent(t, pose));
+    const ps = playerState(game.player, now);
+    const plFlash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
+    const drawPl = (t: Ctx) => {
+      t.save();
+      t.translate(ps.x, ps.y);
+      drawPlayer(t, ps.pose);
+      t.restore();
     };
-    const drawOpp = () => {
-      body(flashOpp ? ov.white() : ov.frame);
-      // signal : la silhouette clignote dans la couleur du coup juste avant l'impact (comme les « tells » de Punch-Out)
+    const paintOpp = () => {
+      const [shx] = oppPt(pose, CX, OPP_PIVOT);
+      this.shadow(c, shx, OPP_PIVOT + 2, 54 * pose.sc * OPP_K, 10);
+      if (flashOpp) this.tinted(c, drawOpp, '#ffffff', 0.92);
+      else drawOpp(c);
       // signal d'esquive : la silhouette clignote dans la couleur du coup pendant les derniers instants avant l'impact
-      if (o.pattern && this.toImpact(o) <= CONFIG.opponent.cueMs && Math.floor(now / 60) % 2 === 0) {
-        c.save();
-        c.globalAlpha = 0.55;
-        body(ov.tint(o.pattern.color));
-        c.restore();
-      }
+      if (cue && Math.floor(now / 70) % 2 === 0) this.tinted(c, drawOpp, sigColor, 0.3, 14);
     };
-    const drawPl = () => {
+    const paintPl = () => {
       if (game.phase === 'menu') return;
-      const pv = playerView(game.player, now);
-      const flash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-      if (pv.jump > 3) {
-        // ombre au sol : Nova a décollé
-        c.fillStyle = 'rgba(8,6,20,0.45)';
-        const w = Math.max(10, 26 - pv.jump * 0.1);
-        c.fillRect(Math.round(CX + pv.x - w), PL_FEET + 1, Math.round(w * 2), 3);
-        c.fillRect(Math.round(CX + pv.x - w + 3), PL_FEET - 1, Math.round(w * 2 - 6), 2);
-      }
-      c.drawImage(flash ? pv.white() : pv.frame, pv.x + pv.ox, pv.y + pv.oy);
+      this.shadow(c, CX + ps.x, PL_FEET + 2, Math.max(12, 28 - ps.jump * 0.2), 5);
+      if (plFlash) this.tinted(c, drawPl, '#ffffff', 0.92);
+      else drawPl(c);
     };
     // quand le gant adverse arrive sur Nova, il passe devant lui : on le voit vraiment le toucher
-    if (o.state === 'attack' && ov.ap >= 0.5) {
-      drawPl();
-      drawOpp();
+    if (o.state === 'attack' && this.attackProgress(o) >= 0.5) {
+      paintPl();
+      paintOpp();
     } else {
-      drawOpp();
-      drawPl();
+      paintOpp();
+      paintPl();
     }
 
-    this.front.clear();
     if (game.phase === 'menu') {
-      for (let y = 0; y < LH; y += 2) for (let x = 0; x < LW; x += 2) this.front.set(x, y, P.ink);
+      c.fillStyle = 'rgba(6,3,20,0.62)';
+      c.fillRect(0, 0, LW, LH);
     } else {
-      this.frontEffects(this.front, game, ov, sigColor, now, input);
+      this.frontEffects(c, game, pose, sigColor, cue, now, input, ps.x);
     }
-    drawPix(c, this.front);
     c.restore();
-    this.chunky();
-    c = this.c;
-    c.imageSmoothingEnabled = false;
 
     if (game.phase === 'menu') {
       this.hud.menu(c, game, now);
     } else {
       this.hud.impactTexts(c, game);
       if (game.phase === 'fight' && game.player.counterT > 0) this.hud.counterHint(c, now);
-      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertMark(c, sigColor, ov.tp); // « ! » = il prépare un coup ; le clignotement dira quand esquiver
+      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertMark(c, pose, sigColor, tp);
       this.hud.drawFight(c, game, dt);
       if (game.controlMode === 'pad' && (game.phase === 'fight' || game.phase === 'intro')) this.padLabels(c, input);
       this.hud.floatingTexts(c, game);
       this.hud.overlay(c, game, now);
     }
+
     if (game.flashT > 0) {
       c.fillStyle = `rgba(255,255,255,${Math.min(0.4, game.flashT / 700)})`; // éclair discret : l'écran reste lisible
       c.fillRect(0, 0, LW, LH);
@@ -223,156 +200,174 @@ export class Renderer {
       }
       pixelText(c, `${this.fps}`, 250, 6, { size: 16, color: '#ffffff' });
     }
-    this.main.imageSmoothingEnabled = false;
-    this.main.drawImage(this.lo, 0, 0, this.canvas.width, this.canvas.height);
   }
 
-  // Gros pixels : chaque bloc de 2x2 prend la couleur la plus fréquente (le plus sombre en cas d'égalité, pour garder les
-  // contours), puis la palette est limitée. Le texte et le bandeau sont tracés ensuite, à pleine résolution.
-  private chunky(): void {
-    const src = new Uint32Array(this.wc.getImageData(0, 0, LW, LH).data.buffer);
-    const out = new Uint32Array(this.chunkOut.data.buffer);
-    const lum = (p: number) => (p & 255) * 0.3 + ((p >> 8) & 255) * 0.59 + ((p >> 16) & 255) * 0.11;
-    for (let y = 0; y < LH; y += 2) {
-      for (let x = 0; x < LW; x += 2) {
-        const i = y * LW + x;
-        const a = src[i];
-        const b = src[i + 1];
-        const c2 = src[i + LW];
-        const d = src[i + LW + 1];
-        let pick = a;
-        if (b === c2 || b === d) pick = b;
-        else if (c2 === d) pick = c2;
-        else if (a === b || a === c2 || a === d) pick = a;
-        else {
-          pick = lum(b) < lum(pick) ? b : pick;
-          pick = lum(c2) < lum(pick) ? c2 : pick;
-          pick = lum(d) < lum(pick) ? d : pick;
-        }
-        const q = nesColor(pick & 255, (pick >> 8) & 255, (pick >> 16) & 255);
-        out[i] = q;
-        out[i + 1] = q;
-        out[i + LW] = q;
-        out[i + LW + 1] = q;
-      }
-    }
-    this.c.putImageData(this.chunkOut, 0, 0);
+  private attackProgress(o: Game['opponent']): number {
+    return o.pattern && o.state === 'attack' ? 1 - o.timer / o.pattern.attackMs : 0;
   }
 
-  // Temps restant avant l'impact du coup en cours (ms), ou une grande valeur s'il n'y en a pas.
-  private toImpact(o: Game['opponent']): number {
-    if (!o.pattern) return 1e9;
-    if (o.state === 'telegraph') return o.timer + o.pattern.attackMs;
-    if (o.state === 'attack') return o.timer;
-    return 1e9;
+  // Place le repère sur l'adversaire (échelle autour des pieds, puis élan autour du bassin).
+  private withOpp(c: Ctx, pose: OppPose, fn: () => void): void {
+    c.save();
+    c.translate(CX, OPP_PIVOT);
+    c.scale(OPP_K, OPP_K);
+    c.translate(-CX, -OPP_PIVOT);
+    c.translate(CX + pose.dx, 290 + pose.dy);
+    c.scale(pose.sc, pose.sc);
+    c.translate(-CX, -290);
+    fn();
+    c.restore();
   }
 
-  private crowdFlashes(c: CanvasRenderingContext2D, now: number): void {
+  private shadow(c: Ctx, x: number, y: number, rx: number, ry: number): void {
+    const g = c.createRadialGradient(x, y, 0, x, y, rx);
+    g.addColorStop(0, 'rgba(6,4,30,0.55)');
+    g.addColorStop(1, 'rgba(6,4,30,0)');
+    c.save();
+    c.translate(0, y);
+    c.scale(1, ry / rx);
+    c.translate(0, -y);
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(x, y, rx, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  // Éclats d'appareils photo dans la salle.
+  private crowdFlashes(c: Ctx, now: number): void {
     const r = rngf(99);
+    c.save();
+    c.fillStyle = '#ffffff';
     for (let i = 0; i < 10; i++) {
-      const x = Math.floor(16 + r() * (LW - 32));
-      const y = Math.floor(120 + r() * 90);
+      const x = 16 + r() * (LW - 32);
+      const y = 120 + r() * 100;
       const ph = r() * 6000;
-      if (((now + ph) % 4200) / 4200 < 0.035) {
-        c.fillStyle = '#ffffff';
-        c.fillRect(x - 2, y, 5, 1);
-        c.fillRect(x, y - 2, 1, 5);
+      const t = ((now + ph) % 4200) / 4200;
+      if (t < 0.035) {
+        c.globalAlpha = 1 - t / 0.035;
+        starPath(c, x, y, 5, 0.8, 4, 0);
+        c.fill();
       }
     }
+    c.restore();
   }
 
-  // Aura tramée derrière l'adversaire, couleur du signal.
-  private aura(p: Pix, tp: number, color: number, now: number): void {
+  // Halo derrière l'adversaire, couleur du signal.
+  private aura(c: Ctx, tp: number, color: string, now: number): void {
     const pulse = 0.55 + 0.45 * Math.abs(Math.sin(now / (130 - 80 * tp)));
-    const cy = 250;
-    const R0 = 50 + 55 * tp * pulse;
-    for (let y = Math.max(0, cy - R0 - 2); y < Math.min(LH, cy + R0 + 2); y++) {
-      for (let x = Math.max(0, CX - R0 - 2); x < Math.min(LW, CX + R0 + 2); x++) {
-        const d = Math.hypot((x - CX) * 0.85, y - cy) / R0;
-        if (d < 1 && (1 - d) * 0.9 * (0.4 + tp) > bayer(x, y) * 0.75) p.set(x, y, color);
-      }
-    }
+    const R0 = 70 + 70 * tp * pulse;
+    const g = c.createRadialGradient(CX, 250, 8, CX, 250, R0);
+    g.addColorStop(0, mix(color, '#ffffff', 0.35));
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.12 + 0.38 * tp;
+    c.fillStyle = g;
+    c.beginPath();
+    c.arc(CX, 250, R0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
   }
 
-  private speed(p: Pix, seed: number, color: number): void {
+  private speed(c: Ctx, seed: number, color: string): void {
     const r = rngf(seed * 977 + 13);
-    for (let i = 0; i < 40; i++) {
+    c.save();
+    c.strokeStyle = color;
+    c.lineCap = 'round';
+    for (let i = 0; i < 34; i++) {
       const a = r() * Math.PI * 2;
       const r0 = 74 + r() * 64;
       const r1 = r0 + 64 + r() * 150;
-      p.line(CX + Math.cos(a) * r0, 300 + Math.sin(a) * r0 * 1.2, CX + Math.cos(a) * r1, 300 + Math.sin(a) * r1 * 1.2, color);
+      c.globalAlpha = 0.25 + r() * 0.4;
+      c.lineWidth = 1 + r() * 1.6;
+      c.beginPath();
+      c.moveTo(CX + Math.cos(a) * r0, 300 + Math.sin(a) * r0 * 1.2);
+      c.lineTo(CX + Math.cos(a) * r1, 300 + Math.sin(a) * r1 * 1.2);
+      c.stroke();
     }
+    c.restore();
   }
 
-  // Étoile irrégulière peinte avec contour automatique.
-  private star(p: Pix, x: number, y: number, rOut: number, rIn: number, spikes: number, rot: number, ramp: Ramp, seed: number): void {
-    const r = rngf(seed);
-    const pts: [number, number][] = [];
-    for (let i = 0; i < spikes * 2; i++) {
-      const a = rot + (i / (spikes * 2)) * Math.PI * 2;
-      const rad = i % 2 === 0 ? rOut * (0.82 + r() * 0.3) : rIn * (0.85 + r() * 0.25);
-      pts.push([x + Math.cos(a) * rad, y + Math.sin(a) * rad]);
-    }
-    this.mask.clear();
-    this.mask.poly(pts, 1);
-    paint(p, this.mask, ramp);
+  // Étoile d'étourdissement (5 branches) qui tourne.
+  private star5(c: Ctx, x: number, y: number, r: number, rot: number, fill: string): void {
+    c.save();
+    starPath(c, x, y, r, r * 0.45, 5, rot);
+    c.fillStyle = fill;
+    c.strokeStyle = '#1d1024';
+    c.lineWidth = 1.8;
+    c.lineJoin = 'round';
+    c.fill();
+    c.stroke();
+    c.restore();
   }
 
-  private circle(p: Pix, cx: number, cy: number, r: number, color: number, a0 = 0, a1 = Math.PI * 2, step = 0.012): void {
-    for (let a = a0; a < a1; a += step) p.set(cx + Math.cos(a) * r, cy + Math.sin(a) * r, color);
-  }
-
-  private frontEffects(p: Pix, g: Game, ov: ReturnType<typeof oppView>, sigColor: number, now: number, input: Input): void {
+  private frontEffects(c: Ctx, g: Game, pose: OppPose, sigColor: string, cue: boolean, now: number, input: Input, plX: number): void {
     const o = g.opponent;
-    const pose = ov.pose;
 
-    // lueur autour du ou des gants qui chargent
-    if (o.state === 'telegraph' || o.state === 'attack') {
-      const blink = (o.state === 'attack' || this.toImpact(o) <= CONFIG.opponent.cueMs) && Math.floor(now / 70) % 2 === 0;
-      if (blink) {
-        for (const idx of pose.glow) {
-          const gg = idx === 0 ? pose.gl : pose.gr;
-          // même transformation que le sprite (inclinaison + élan autour du bassin)
-          const [cx, cy] = oppPt(pose, gg.x, gg.y);
-          for (let a = 0; a < Math.PI * 2; a += 0.06) {
-            const rr = gg.r * pose.sc * OPP_K + 5 + (Math.floor(a * 7) & 1) * 2;
-            p.set(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sigColor);
-          }
-        }
+    // anneaux autour des gants qui frappent : seulement quand il faut esquiver
+    if ((o.state === 'telegraph' || o.state === 'attack') && cue) {
+      for (const idx of pose.glow) {
+        const gg = idx === 0 ? pose.gl : pose.gr;
+        const [cx, cy] = oppPt(pose, gg.x, gg.y);
+        const rr = gg.r * pose.sc * OPP_K + 5 + 2 * Math.sin(now / 60);
+        c.save();
+        c.strokeStyle = sigColor;
+        c.lineWidth = 3;
+        c.setLineDash([6, 5]);
+        c.lineDashOffset = -now / 25;
+        c.beginPath();
+        c.arc(cx, cy, rr, 0, Math.PI * 2);
+        c.stroke();
+        c.restore();
       }
     }
     // étoiles qui tournent au-dessus de la tête quand il est sonné ou K.O.
     if (o.state === 'hit' || o.state === 'ko') {
-      const [sx, sy] = oppPt(pose, pose.head[0], pose.head[1] - 36);
+      const [sx, sy] = oppPt(pose, pose.head[0], pose.head[1] - 40);
       for (let i = 0; i < 4; i++) {
         const a = now / 260 + (i * Math.PI) / 2;
-        this.sparkle(p, sx + Math.cos(a) * 34, sy + Math.sin(a) * 9, 5 + (Math.sin(a) > 0 ? 2 : 0), R.burstY);
+        this.star5(c, sx + Math.cos(a) * 30, sy + Math.sin(a) * 8, 5 + (Math.sin(a) > 0 ? 2 : 0), a, '#ffe14d');
       }
     }
     // Nova sonné : étoiles rouges au-dessus de la tête
     if (g.player.stun > 0) {
       for (let i = 0; i < 4; i++) {
         const a = now / 200 + (i * Math.PI) / 2;
-        this.sparkle(p, CX + Math.cos(a) * 20, 296 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), R.burstR);
+        this.star5(c, CX + plX + Math.cos(a) * 20, 296 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), a, '#ff5468');
       }
     }
     // anneau pointillé : l'adversaire est ouvert
     if (o.vulnerable) {
       const [cx, cy] = oppPt(pose, pose.head[0], pose.head[1]);
-      for (let a = 0; a < Math.PI * 2; a += 0.05) {
-        if (Math.floor((a + now / 500) * 4) % 2 === 0) p.rect(Math.round(cx + Math.cos(a) * 36), Math.round(cy + Math.sin(a) * 40), 3, 3, Math.floor(now / 120) % 2 ? P.yellow : P.white);
-      }
+      c.save();
+      c.strokeStyle = Math.floor(now / 120) % 2 ? '#ffe14d' : '#ffffff';
+      c.lineWidth = 2.6;
+      c.setLineDash([3, 5]);
+      c.lineDashOffset = -now / 40;
+      c.beginPath();
+      c.ellipse(cx, cy, 30, 34, 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
     }
-    // traînées d'esquive : latérale (horizontales) ou recul (verticales)
+    // traînées d'esquive : latérale (horizontales) ou parade (verticales)
     const d = g.player.dodge;
     if (d) {
       const alpha = 1 - d.t / d.ms;
+      c.save();
+      c.strokeStyle = '#7df9ff';
+      c.lineCap = 'round';
+      c.lineWidth = 1.6;
       if (d.dir === 'back') {
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
           const x = CX - 100 + i * 18 + ((i * 7) % 5);
           const y = 330 + ((now / 25 + i * 17) % 50);
-          p.line(x, y, x, y + 18 + (i % 3) * 8, P.cyan);
+          c.globalAlpha = 0.5;
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x, y + 18 + (i % 3) * 8);
+          c.stroke();
         }
       } else {
         const dir = d.dir === 'left' ? 1 : -1;
@@ -380,76 +375,144 @@ export class Renderer {
           if (i / 12 > alpha) continue;
           const y = 320 + i * 7 + ((now / 30 + i * 3) % 3);
           const x = CX + g.player.dodgeOffset * LS + dir * (34 + (i % 3) * 12);
-          p.line(x, y, x + dir * (24 + (i % 4) * 10), y, P.cyan);
+          c.globalAlpha = 0.5;
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x + dir * (24 + (i % 4) * 10), y);
+          c.stroke();
         }
       }
+      c.restore();
     }
-    // impacts : étincelles façon 8/16 bits
-    for (const im of g.impacts) this.impactFx(p, im.kind, im.x * LS, im.y * LS, im.t / 360);
+    // impacts
+    for (const im of g.impacts) this.impactFx(c, im.kind, im.x * LS, im.y * LS, im.t / 360);
     // cadre cyan : fenêtre de contre
     if (g.phase === 'fight' && g.player.counterT > 0) {
       const a = (0.5 + 0.3 * Math.sin(now / 70)) * Math.min(1, (g.player.counterT / CONFIG.player.counterWindowMs) * 3);
-      this.edgeGlow(p, 8, a, P.cyan);
+      this.edgeGlow(c, '#7df9ff', a * 0.7);
     }
     // bord rouge pulsé : vie basse
-    if (g.player.hpRatio < 0.3 && g.player.hp > 0) this.edgeGlow(p, 11, 0.5 + 0.4 * Math.sin(now / 160), R.burstR.sh);
+    if (g.player.hpRatio < 0.3 && g.player.hp > 0) this.edgeGlow(c, '#ff2a40', (0.5 + 0.4 * Math.sin(now / 160)) * 0.6);
     // K.O. : rayons
     if (g.phase === 'koPause') {
       const r = rngf(7);
-      for (let i = 0; i < 46; i++) {
+      c.save();
+      c.strokeStyle = 'rgba(255,255,255,0.5)';
+      c.lineCap = 'round';
+      for (let i = 0; i < 40; i++) {
         const a = r() * Math.PI * 2;
         const r0 = 50 + r() * 50;
-        p.line(CX + Math.cos(a) * r0, 240 + Math.sin(a) * r0, CX + Math.cos(a) * 380, 240 + Math.sin(a) * 380, P.paper);
+        c.lineWidth = 1 + r() * 2;
+        c.beginPath();
+        c.moveTo(CX + Math.cos(a) * r0, 240 + Math.sin(a) * r0);
+        c.lineTo(CX + Math.cos(a) * 380, 240 + Math.sin(a) * 380);
+        c.stroke();
       }
+      c.restore();
     }
     if (g.phase === 'fight' || g.phase === 'intro') {
-      this.superButton(p, g, now);
-      if (g.controlMode === 'pad') this.padOverlay(p, input);
+      this.superButton(c, g, now);
+      if (g.controlMode === 'pad') this.padOverlay(c, input);
     }
   }
 
-  // Étoile à 4 branches (étincelle de coup).
-  private sparkle(p: Pix, x: number, y: number, s: number, ramp: Ramp): void {
-    if (s < 2) return;
-    const a = s * 0.22;
-    this.mask.clear();
-    this.mask.poly([[x, y - s], [x + a, y - a], [x + s, y], [x + a, y + a], [x, y + s], [x - a, y + a], [x - s, y], [x - a, y - a]], 1);
-    paint(p, this.mask, ramp);
+  // Étoile d'impact « BD » : pointes irrégulières, cœur clair, contour franc.
+  private burst(c: Ctx, x: number, y: number, r: number, inner: string, outer: string, spikes: number, seed: number, rot: number): void {
+    const rnd = rngf(seed);
+    c.save();
+    c.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+      const a = rot + (i / (spikes * 2)) * Math.PI * 2;
+      const rad = i % 2 === 0 ? r * (0.82 + rnd() * 0.3) : r * 0.5 * (0.85 + rnd() * 0.25);
+      const px = x + Math.cos(a) * rad;
+      const py = y + Math.sin(a) * rad;
+      if (i === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.lineJoin = 'round';
+    c.fillStyle = outer;
+    c.strokeStyle = '#1d1024';
+    c.lineWidth = 2.4;
+    c.fill();
+    c.stroke();
+    c.beginPath();
+    c.arc(x, y, r * 0.45, 0, Math.PI * 2);
+    c.fillStyle = inner;
+    c.fill();
+    c.restore();
   }
 
-  // Effets de coups sobres : une étincelle qui grandit puis rétrécit, comme sur console 8/16 bits.
-  private impactFx(p: Pix, kind: 'hit' | 'counter' | 'block' | 'hurt' | 'super', x: number, y: number, k: number): void {
+  private impactFx(c: Ctx, kind: 'hit' | 'counter' | 'block' | 'hurt' | 'super', x: number, y: number, k: number): void {
     const pulse = k < 0.25 ? 0.5 + k * 2 : k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+    if (pulse <= 0) return;
+    const rot = k * 0.5;
     if (kind === 'hit') {
-      this.sparkle(p, x, y, 17 * pulse, R.burstY);
-      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.rect(Math.round(x + dx * (16 * k + 8)), Math.round(y + dy * (16 * k + 8)), 2, 2, P.white);
+      this.burst(c, x, y, 20 * pulse, '#ffffff', '#ffd23f', 9, 5, rot);
     } else if (kind === 'block') {
-      this.sparkle(p, x, y, 9 * pulse, R.burstW);
+      this.burst(c, x, y, 12 * pulse, '#ffffff', '#b9c7e6', 6, 9, rot);
     } else if (kind === 'counter') {
-      this.sparkle(p, x, y, 26 * pulse, R.burstC);
-      this.circle(p, x, y, 12 + 40 * k, P.cyan, 0, Math.PI * 2, 0.07);
+      this.burst(c, x, y, 30 * pulse, '#ffffff', '#52e2ff', 11, 3, rot);
+      c.save();
+      c.strokeStyle = '#7df9ff';
+      c.lineWidth = 2.4;
+      c.globalAlpha = 1 - k;
+      c.beginPath();
+      c.arc(x, y, 14 + 44 * k, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
     } else if (kind === 'hurt') {
-      this.sparkle(p, x, y, 22 * pulse, R.burstR);
+      this.burst(c, x, y, 26 * pulse, '#fff2a8', '#ff3b4e', 10, 8, rot);
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2 + k;
-        this.sparkle(p, x + Math.cos(a) * (12 + 38 * k), y + Math.sin(a) * (12 + 38 * k), 6 * pulse, R.burstY);
+        this.star5(c, x + Math.cos(a) * (16 + 40 * k), y + Math.sin(a) * (16 + 40 * k), 6 * pulse, a, '#ffd23f');
       }
     } else {
-      this.sparkle(p, x, y, 44 * pulse, R.burstC);
+      this.burst(c, x, y, 52 * pulse, '#ffffff', '#ffc93c', 14, 12, rot);
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
-        this.sparkle(p, x + Math.cos(a) * (20 + 90 * k), y + Math.sin(a) * (20 + 90 * k), 11 * pulse, R.burstY);
+        this.star5(c, x + Math.cos(a) * (24 + 96 * k), y + Math.sin(a) * (24 + 96 * k), 10 * pulse, a, '#52e2ff');
       }
     }
+  }
+
+  // Lueur sur les bords de l'écran (fenêtre de contre, vie basse).
+  private edgeGlow(c: Ctx, color: string, a: number): void {
+    const g = c.createRadialGradient(LW / 2, LH / 2, LH * 0.34, LW / 2, LH / 2, LH * 0.62);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, color);
+    c.save();
+    c.globalAlpha = Math.max(0, Math.min(1, a));
+    c.fillStyle = g;
+    c.fillRect(0, 0, LW, LH);
+    c.restore();
   }
 
   // Croix directionnelle (gauche) et deux boutons de poing (droite), translucides.
-  private padOverlay(p: Pix, input: Input): void {
+  private padOverlay(c: Ctx, input: Input): void {
     const { dpad, punchLeft, punchRight } = CONFIG.input.pad;
     const cx = dpad.x * LS;
     const cy = dpad.y * LS;
     const R0 = dpad.rMax * LS;
-    this.circle(p, cx, cy, R0, P.steel, 0, Math.PI * 2, 0.02);
+    c.save();
+    const base = c.createRadialGradient(cx, cy, R0 * 0.2, cx, cy, R0);
+    base.addColorStop(0, 'rgba(255,255,255,0.1)');
+    base.addColorStop(1, 'rgba(180,200,255,0.2)');
+    c.fillStyle = base;
+    c.strokeStyle = 'rgba(255,255,255,0.45)';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(cx, cy, R0, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+    // anneau intérieur : repère de « petite » et « grosse » esquive
+    c.strokeStyle = 'rgba(255,255,255,0.22)';
+    c.lineWidth = 1.2;
+    c.setLineDash([3, 4]);
+    c.beginPath();
+    c.arc(cx, cy, (dpad.rMin + (dpad.rMax - dpad.rMin) * 0.55) * LS, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
     const arrow = (dir: 'up' | 'down' | 'left' | 'right'): [number, number][] => {
       const a = 20;
       const b = 44;
@@ -458,41 +521,48 @@ export class Renderer {
     };
     for (const dir of ['up', 'down', 'left', 'right'] as const) {
       const on = input.padDir === dir;
-      this.mask.clear();
-      this.mask.poly(arrow(dir), 1);
-      const col = dir === 'up' ? P.cyan : P.steel;
-      for (let y = this.mask.by0; y <= this.mask.by1; y++) for (let x = this.mask.bx0; x <= this.mask.bx1; x++) if (this.mask.get(x, y) && (on || (x + y) % 2 === 0)) p.set(x, y, on ? P.yellow : col);
+      const pts = arrow(dir);
+      c.beginPath();
+      c.moveTo(pts[0][0], pts[0][1]);
+      c.lineTo(pts[1][0], pts[1][1]);
+      c.lineTo(pts[2][0], pts[2][1]);
+      c.closePath();
+      c.fillStyle = on ? '#ffe14d' : dir === 'up' ? 'rgba(125,249,255,0.55)' : 'rgba(255,255,255,0.4)';
+      c.strokeStyle = 'rgba(20,10,40,0.6)';
+      c.lineWidth = 1.4;
+      c.lineJoin = 'round';
+      c.fill();
+      c.stroke();
     }
     for (const [b, held] of [[punchLeft, input.btnLeft], [punchRight, input.btnRight]] as const) {
       const bx = b.x * LS;
       const by = b.y * LS;
       const br = b.r * LS;
-      this.circle(p, bx, by, br, held ? P.yellow : P.steel, 0, Math.PI * 2, 0.02);
-      this.circle(p, bx, by, br - 1, held ? P.yellow : P.steel, 0, Math.PI * 2, 0.02);
-      for (let y = Math.floor(by - br + 2); y < by + br - 2; y++) for (let x = Math.floor(bx - br + 2); x < bx + br - 2; x++) if (Math.hypot(x - bx, y - by) < br - 2 && (held || (x + y) % 2 === 0)) p.set(x, y, held ? P.yellow : P.steel);
+      const g = c.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
+      g.addColorStop(0, held ? '#fff6b0' : 'rgba(255,255,255,0.32)');
+      g.addColorStop(1, held ? '#ffb000' : 'rgba(150,170,255,0.28)');
+      c.fillStyle = g;
+      c.strokeStyle = held ? '#ffe14d' : 'rgba(255,255,255,0.55)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(bx, by, br, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
     }
+    c.restore();
   }
 
-  private padLabels(c: CanvasRenderingContext2D, input: Input): void {
+  private padLabels(c: Ctx, input: Input): void {
     const { dpad, punchLeft, punchRight } = CONFIG.input.pad;
     pixelText(c, 'G', Math.round(punchLeft.x * LS), Math.round(punchLeft.y * LS) - 8, { size: 16, color: input.btnLeft ? '#14101c' : '#ffffff' }, 'center');
     pixelText(c, 'D', Math.round(punchRight.x * LS), Math.round(punchRight.y * LS) - 8, { size: 16, color: input.btnRight ? '#14101c' : '#ffffff' }, 'center');
     const head = input.padDir === 'up';
-    pixelText(c, head ? 'VISAGE' : 'CORPS', Math.round(((punchLeft.x + punchRight.x) / 2) * LS), Math.round((punchLeft.y - punchLeft.r - 14) * LS), { size: 8, color: head ? '#7df9ff' : '#ffd23f', outline: null }, 'center');
-    pixelText(c, 'HAUT=VISAGE', Math.round(dpad.x * LS), Math.round((dpad.y - dpad.rMax - 12) * LS), { size: 8, color: '#7df9ff', outline: null }, 'center');
-  }
-
-  private edgeGlow(p: Pix, w: number, a: number, color: number): void {
-    for (let y = 0; y < LH; y++) {
-      for (let x = 0; x < LW; x++) {
-        const e = Math.min(x, LW - 1 - x, y, LH - 1 - y);
-        if (e < w && (1 - e / w) * a > bayer(x, y) * 0.85) p.set(x, y, color);
-      }
-    }
+    pixelText(c, head ? 'VISAGE' : 'CORPS', Math.round(((punchLeft.x + punchRight.x) / 2) * LS), Math.round((punchLeft.y - punchLeft.r - 14) * LS), { size: 8, color: head ? '#7df9ff' : '#ffd23f', outline: '#1d1024' }, 'center');
+    pixelText(c, 'HAUT = VISAGE', Math.round(dpad.x * LS), Math.round((dpad.y - dpad.rMax - 12) * LS), { size: 8, color: '#7df9ff', outline: '#1d1024' }, 'center');
   }
 
   // Bouton du super uppercut : anneau qui se remplit avec la jauge, clignote quand il est prêt.
-  private superButton(p: Pix, g: Game, now: number): void {
+  private superButton(c: Ctx, g: Game, now: number): void {
     const b = CONFIG.input.superButton;
     const cx = b.x * LS;
     const cy = b.y * LS;
@@ -500,28 +570,54 @@ export class Renderer {
     const frac = Math.min(1, g.player.meter / CONFIG.super.max);
     const ready = g.player.meterFull && !g.player.superAnim;
     const blink = Math.floor(now / 140) % 2 === 0;
-    // anneau de fond (pointillé = translucide) puis arc de jauge
-    for (let a = 0; a < Math.PI * 2; a += 0.01) {
-      if (Math.floor(a * 14) % 2 === 0 || ready) p.set(cx + Math.cos(a) * r, cy + Math.sin(a) * r, ready && blink ? P.white : P.steel);
-    }
-    for (let t = 0; t < 3; t++) this.circle(p, cx, cy, r - 3 - t, ready ? (blink ? P.yellow : P.orange) : P.gold, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2, 0.012);
-    // icône : flèche qui monte, en trame tant que la jauge n'est pas pleine
-    const solid = ready && blink;
-    const col = ready ? (blink ? P.yellow : P.white) : P.steel;
-    const pts: [number, number][] = [[cx, cy - 15], [cx + 13, cy], [cx + 5, cy], [cx + 5, cy + 14], [cx - 5, cy + 14], [cx - 5, cy], [cx - 13, cy]];
-    this.mask.clear();
-    this.mask.poly(pts, 1);
-    for (let y = this.mask.by0; y <= this.mask.by1; y++) for (let x = this.mask.bx0; x <= this.mask.bx1; x++) if (this.mask.get(x, y) && (solid || (x + y) % 2 === 0)) p.set(x, y, col);
+    c.save();
+    const bg = c.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r);
+    bg.addColorStop(0, ready ? (blink ? '#fff6b0' : '#ffc93c') : 'rgba(255,255,255,0.18)');
+    bg.addColorStop(1, ready ? '#ff8a00' : 'rgba(80,90,160,0.3)');
+    c.fillStyle = bg;
+    c.beginPath();
+    c.arc(cx, cy, r, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.5)';
+    c.lineWidth = 2;
+    c.stroke();
+    // arc de jauge
+    c.lineCap = 'round';
+    c.lineWidth = 4.5;
+    c.strokeStyle = ready ? (blink ? '#ffffff' : '#ffe14d') : '#ffc93c';
+    c.beginPath();
+    c.arc(cx, cy, r - 3, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+    c.stroke();
+    // icône : flèche qui monte
+    c.fillStyle = ready ? '#3a1a00' : 'rgba(255,255,255,0.6)';
+    c.beginPath();
+    c.moveTo(cx, cy - 14);
+    c.lineTo(cx + 12, cy);
+    c.lineTo(cx + 4.5, cy);
+    c.lineTo(cx + 4.5, cy + 13);
+    c.lineTo(cx - 4.5, cy + 13);
+    c.lineTo(cx - 4.5, cy);
+    c.lineTo(cx - 12, cy);
+    c.closePath();
+    c.fill();
+    c.restore();
   }
 
   // « ! » dans une étoile au-dessus de l'adversaire quand il charge un coup.
-  private alertMark(c: CanvasRenderingContext2D, color: number, tp: number): void {
-    const p = this.front;
-    p.clear();
-    const k = Math.min(1, tp * 4);
-    const ramp = color === P.red ? R.burstR : R.burstY;
-    this.star(p, CX, 78, 26 * k, 14 * k, 8, 0, ramp, 3);
-    drawPix(c, p);
-    if (k > 0.6) pixelText(c, '!', CX, 62, { size: 32, color: '#ffffff', outline: '#14101c' }, 'center');
+  private alertMark(c: Ctx, pose: OppPose, color: string, tp: number): void {
+    const [x, y] = oppPt(pose, pose.head[0], pose.head[1] - 58);
+    const s = 0.6 + 0.5 * Math.min(1, tp * 1.4);
+    c.save();
+    c.translate(x, y);
+    c.scale(s, s);
+    starPath(c, 0, 0, 20, 12, 8, 0);
+    c.fillStyle = color;
+    c.strokeStyle = '#1d1024';
+    c.lineWidth = 2.6;
+    c.lineJoin = 'round';
+    c.fill();
+    c.stroke();
+    c.restore();
+    pixelText(c, '!', x, y - 9 * s, { size: 16 * s + 2, color: '#1d1024', outline: null }, 'center');
   }
 }

@@ -36,17 +36,17 @@ const BODY = '#ff3b8a';
 const UPPER = '#ff3b4e';
 
 export const PATTERNS: Pattern[] = [
-  { id: 'direct-gauche', name: 'Direct gauche', kind: 'direct', side: 'left', color: DIRECT, telegraphMs: 870, attackMs: 340, recoveryMs: 970, damage: 14, lateral: 'opposite', needPower: 0.4, blockable: true },
-  { id: 'direct-droit', name: 'Direct droit', kind: 'direct', side: 'right', color: DIRECT, telegraphMs: 830, attackMs: 340, recoveryMs: 990, damage: 15, lateral: 'opposite', needPower: 0.4, blockable: true },
-  { id: 'crochet-gauche', name: 'Crochet gauche', kind: 'hook', side: 'left', color: HOOK, telegraphMs: 1010, attackMs: 430, recoveryMs: 1100, damage: 20, lateral: 'any', needPower: 0.75, blockable: true },
-  { id: 'crochet-droit', name: 'Crochet droit', kind: 'hook', side: 'right', color: HOOK, telegraphMs: 990, attackMs: 430, recoveryMs: 1120, damage: 21, lateral: 'any', needPower: 0.75, blockable: true },
+  { id: 'direct-gauche', name: 'Direct gauche', kind: 'direct', side: 'left', color: DIRECT, telegraphMs: 870, attackMs: 340, recoveryMs: 970, damage: 14, lateral: 'opposite', needPower: 0.3, blockable: true },
+  { id: 'direct-droit', name: 'Direct droit', kind: 'direct', side: 'right', color: DIRECT, telegraphMs: 830, attackMs: 340, recoveryMs: 990, damage: 15, lateral: 'opposite', needPower: 0.3, blockable: true },
+  { id: 'crochet-gauche', name: 'Crochet gauche', kind: 'hook', side: 'left', color: HOOK, telegraphMs: 1010, attackMs: 430, recoveryMs: 1100, damage: 20, lateral: 'any', needPower: 0.62, blockable: true },
+  { id: 'crochet-droit', name: 'Crochet droit', kind: 'hook', side: 'right', color: HOOK, telegraphMs: 990, attackMs: 430, recoveryMs: 1120, damage: 21, lateral: 'any', needPower: 0.62, blockable: true },
   { id: 'remontant', name: 'Remontant', kind: 'uppercut', side: 'right', color: UPPER, telegraphMs: 1170, attackMs: 460, recoveryMs: 1320, damage: 28, lateral: 'none', blockable: true },
-  { id: 'jab-gauche', name: 'Jab gauche', kind: 'jab', side: 'left', color: JAB, telegraphMs: 560, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.4, blockable: true },
-  { id: 'jab-droit', name: 'Jab droit', kind: 'jab', side: 'right', color: JAB, telegraphMs: 560, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.4, blockable: true },
-  { id: 'marteau-gauche', name: 'Marteau gauche', kind: 'overhand', side: 'left', color: HAMMER, telegraphMs: 1100, attackMs: 460, recoveryMs: 1250, damage: 24, lateral: 'any', needPower: 0.75, blockable: true },
-  { id: 'marteau-droit', name: 'Marteau droit', kind: 'overhand', side: 'right', color: HAMMER, telegraphMs: 1080, attackMs: 460, recoveryMs: 1250, damage: 25, lateral: 'any', needPower: 0.75, blockable: true },
+  { id: 'jab-gauche', name: 'Jab gauche', kind: 'jab', side: 'left', color: JAB, telegraphMs: 560, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.3, blockable: true },
+  { id: 'jab-droit', name: 'Jab droit', kind: 'jab', side: 'right', color: JAB, telegraphMs: 560, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.3, blockable: true },
+  { id: 'marteau-gauche', name: 'Marteau gauche', kind: 'overhand', side: 'left', color: HAMMER, telegraphMs: 1100, attackMs: 460, recoveryMs: 1250, damage: 24, lateral: 'any', needPower: 0.62, blockable: true },
+  { id: 'marteau-droit', name: 'Marteau droit', kind: 'overhand', side: 'right', color: HAMMER, telegraphMs: 1080, attackMs: 460, recoveryMs: 1250, damage: 25, lateral: 'any', needPower: 0.62, blockable: true },
   { id: 'foie-gauche', name: 'Crochet au corps gauche', kind: 'bodyhook', side: 'left', color: BODY, telegraphMs: 1000, attackMs: 400, recoveryMs: 1100, damage: 18, lateral: 'none', blockable: true },
   { id: 'foie-droit', name: 'Crochet au corps droit', kind: 'bodyhook', side: 'right', color: BODY, telegraphMs: 980, attackMs: 400, recoveryMs: 1100, damage: 19, lateral: 'none', blockable: true },
   // enchaînement : un jab, puis tout de suite un direct de l'autre bras
-  { id: 'un-deux', name: 'Un-deux', kind: 'jab', side: 'left', color: JAB, telegraphMs: 620, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.4, blockable: true, chain: 'direct-droit', chainTelegraphMs: 400 },
+  { id: 'un-deux', name: 'Un-deux', kind: 'jab', side: 'left', color: JAB, telegraphMs: 620, attackMs: 250, recoveryMs: 700, damage: 8, lateral: 'opposite', needPower: 0.3, blockable: true, chain: 'direct-droit', chainTelegraphMs: 400 },
 ];

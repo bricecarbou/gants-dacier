@@ -207,7 +207,7 @@ export class Game {
       this.landSuper();
     }
 
-    for (const e of this.opponent.update(dt)) {
+    for (const e of this.opponent.update(dt, pl.dodgeOffset * 0.8)) {
       if (e.type === 'telegraph') this.audio.play('telegraph');
       else this.resolveImpact(e.pattern);
     }
@@ -258,7 +258,7 @@ export class Game {
   private resolvePunch(hand: Side, target: Target): void {
     const pl = this.player;
     const o = this.opponent;
-    const x = hand === 'left' ? 160 : 200;
+    const x = (hand === 'left' ? 160 : 200) + this.opponent.fx / 0.8; // l'impact suit l'adversaire qui bouge
     const y = target === 'head' ? 262 : 350;
 
     // CONTRE : frapper juste avant l'impact interrompt le coup de l'adversaire

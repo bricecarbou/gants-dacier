@@ -30,14 +30,14 @@ export const CONFIG = {
     punchAnimMs: 300,
     punchArriveMs: 130, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
     punchDamage: { head: 5, body: 3 },
-    dodgeActiveMs: 520, // durée pendant laquelle l'esquive protège (grosse esquive : 100 %, petite : environ 60 %)
+    dodgeActiveMs: 620, // durée pendant laquelle l'esquive protège (grosse esquive : 100 %, petite : environ 60 %)
     dodgeCooldownMs: 180,
     dodgeShiftPx: 70,
     hitStunMs: 450,
-    counterWindowMs: 1200, // fenêtre de coups bonus après une esquive latérale
+    counterWindowMs: 1500, // fenêtre de coups bonus après une esquive latérale
     blockChipPct: 0.2, // part des dégâts qui passent quand on pare (mini 2) : 32 % en garde haute, 14 % en parade profonde
     counterMultiplier: 1.6,
-    counterPunchWindowMs: 440, // frapper dans les X ms avant l'impact = contre
+    counterPunchWindowMs: 650, // frapper dans les X ms avant l'impact = contre
     counterPunchMultiplier: 2.4,
   },
   hitStop: { hit: 45, counter: 90, hurt: 130, super: 230 }, // arrêt sur image à l'impact (ms)
@@ -54,7 +54,7 @@ export const CONFIG = {
   opponent: {
     maxHp: 100,
     hitStunMs: 220,
-    cueMs: 500, // le signal d'esquive (clignotement) démarre ce temps avant l'impact : esquiver à ce moment protège jusqu'au coup
+    cueMs: 650, // le signal d'esquive (clignotement) démarre ce temps avant l'impact : esquiver à ce moment protège jusqu'au coup
     idleMs: { min: 950, max: 1550 },
     idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
     // ids des coups (voir patterns.ts) : ordre apprenable

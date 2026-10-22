@@ -1,16 +1,11 @@
-import '@fontsource/press-start-2p/latin-400.css';
 import { Audio } from './audio/audio';
 import { Game } from './game/state';
 import { Input } from './game/input';
 import { startLoop } from './game/loop';
-import { fontLoading } from './render/font';
 import { Renderer } from './render/renderer';
-import { prewarmFrames } from './render/sprites';
 
-void fontLoading; // lance le chargement de la police pixel dès le démarrage
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
-prewarmFrames(); // images d'animation préparées pendant l'écran titre
 const input = new Input(canvas);
 const audio = new Audio();
 const game = new Game(audio, input);
@@ -31,4 +26,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 // Accès console pour régler le feeling : ouvrir l'URL avec ?debug
-if (import.meta.env.DEV || location.search.includes('debug')) (window as unknown as { __game: Game }).__game = game;
+if (import.meta.env.DEV || location.search.includes('debug')) {
+  const w = window as unknown as { __game: Game; __renderer: Renderer; __input: Input };
+  w.__game = game;
+  w.__renderer = renderer;
+  w.__input = input;
+}

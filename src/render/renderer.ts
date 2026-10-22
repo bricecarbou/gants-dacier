@@ -13,7 +13,7 @@ import { type Ctx, starPath } from './vec';
 const CX = LW / 2;
 const OPP_K = 0.86; // l'adversaire est tracé à 86 % de sa taille (environ 45 % de la hauteur de l'écran)
 const OPP_PIVOT = 392; // ligne des pieds : point fixe de la mise à l'échelle
-const PL_K = 1.25; // Nova est grand : proportions de combat de console (environ 28 % de l'écran)
+const PL_K = 0.98; // Nova est petit et mince, vu de dos et en entier, comme le boxeur d'un jeu de boxe de console
 
 // Passe un point du sprite de l'adversaire à l'écran (élan autour du bassin, puis échelle autour des pieds).
 function oppPt(pose: { dx: number; dy: number; sc: number }, x: number, y: number): [number, number] {

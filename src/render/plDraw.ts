@@ -118,7 +118,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   py += 7 * pose.cover;
   hy += 3 * pose.cover;
   const calm = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
-  py += calm * (4 + 3 * Math.abs(pose.bob)); // en garde, il est légèrement fléchi et rebondit sur ses appuis
+  py += calm * (1.5 + 2.5 * Math.abs(pose.bob)); // en garde, il est légèrement fléchi et rebondit sur ses appuis
   tw += calm * 0.1 * pose.bob;
   tilt += calm * -0.03 * pose.bob;
   hy += calm * 1.2 * Math.abs(pose.bob);
@@ -195,7 +195,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const bobL = Math.max(0, pose.bob) * 3;
   const bobR = Math.max(0, -pose.bob) * 3;
   for (const s of [-1, 1] as const) {
-    const spread = 15 + Math.abs(pose.d) * 6 + 6 * pose.cover + 14 * pose.down + 3 * pose.win + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
+    const spread = 12 + Math.abs(pose.d) * 6 + 6 * pose.cover + 14 * pose.down + 3 * pose.win + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
     let fx = CX + s * spread + pose.d * 9;
     let fl = (s === -1 ? bobL : bobR) + pose.air * 18;
     if (hs !== 0 && pose.target === 'body' && s === hs) fl = Math.max(0, fl - 1);
@@ -289,7 +289,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     mixTo(pose.win, s * 31, -100, s * 35, -64); // victoire : les gants en l'air
     mixTo(pose.down, s * 31, 20, s * 31, 6); // K.O. : les gants pendent
     const gw = tx(gx, gy);
-    const guard = { x: gw[0], y: gw[1], r: 12 };
+    const guard = { x: gw[0], y: gw[1], r: 10 };
     let g = guard;
     const eg = tx(ex, ey);
     let el: Pt = eg;

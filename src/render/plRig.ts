@@ -1,5 +1,5 @@
 import type { PlPose } from './plDraw';
-import { type Ctx, polyPath } from './vec';
+import { type Ctx, smoothPath } from './vec';
 
 // « Nova » construit comme un vrai squelette en 3D (proportions humaines : 7,5 têtes de haut, épaules de 2 têtes, hanches
 // de 1,5 tête, jambes de la moitié de la hauteur), posé en garde de boxeur et tourné de trois quarts. Les poses (repos,
@@ -109,12 +109,12 @@ interface Tone {
   edge?: string; // contour propre à la matière (plus discret que le noir)
 }
 const TONE = {
-  skin: { base: '#eaa56b', shade: '#c2845a', light: '#f7c492', edge: '#8a5535' },
-  hair: { base: '#14141f', shade: '#0a0a12' },
-  tank: { base: '#1a1b2c', shade: '#10111c' },
-  shorts: { base: '#2d6df2', shade: '#2358c4' },
-  glove: { base: '#46c2ff', shade: '#2f86d6' },
-  boot: { base: '#262640', shade: '#181830' },
+  skin: { base: '#cf9467', shade: '#8f5c3a', light: '#ebb78c', edge: '#5c3822' },
+  hair: { base: '#14141f', shade: '#07070c', light: '#32324a' },
+  tank: { base: '#1d1e32', shade: '#0d0e18', light: '#3a3c5c' },
+  shorts: { base: '#2d6df2', shade: '#173a96', light: '#6a9bff' },
+  glove: { base: '#3cb4f5', shade: '#1b5fa8', light: '#9ee0ff', edge: '#0d3566' },
+  boot: { base: '#2a2a48', shade: '#10101f', light: '#4a4a74' },
   belt: { base: '#10101a', shade: '#10101a' },
 };
 const OUT = '#1d1024';
@@ -163,44 +163,43 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
 
   // --- primitives ---
   const flat = (pts: Pt[], tone: Tone, shade = true): void => {
-    const path = (dx = 0, dy = 0): void => polyPath(c, dx || dy ? pts.map((p): Pt => [p[0] + dx, p[1] + dy]) : pts);
-    const h = PX * 1.25;
-    c.fillStyle = tone.base;
+    const path = (): void => smoothPath(c, pts);
     path();
+    c.fillStyle = tone.base;
     c.fill();
     if (shade) {
-      // trois tons : reflet en haut à gauche, ombre en bas à droite, la couleur de base au milieu
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const q of pts) {
+        x0 = Math.min(x0, q[0]);
+        y0 = Math.min(y0, q[1]);
+        x1 = Math.max(x1, q[0]);
+        y1 = Math.max(y1, q[1]);
+      }
       c.save();
       path();
       c.clip();
-      if (tone.light) {
-        c.fillStyle = tone.light;
-        c.fillRect(-100, -100, 700, 800);
-        c.save();
-        path(h, h);
-        c.clip();
-        c.fillStyle = tone.shade;
-        c.fillRect(-100, -100, 700, 800);
-        c.save();
-        path(-h, -h);
-        c.clip();
-        c.fillStyle = tone.base;
-        c.fillRect(-100, -100, 700, 800);
-        c.restore();
-        c.restore();
-      } else {
-        c.fillStyle = tone.shade;
-        c.fillRect(-100, -100, 700, 800);
-        c.fillStyle = tone.base;
-        path(-h, -h);
-        c.fill();
-      }
+      // volume : reflet en haut à gauche, couleur franche au milieu, ombre en bas à droite
+      const g = c.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, tone.light ?? tone.base);
+      g.addColorStop(0.4, tone.base);
+      g.addColorStop(1, tone.shade);
+      c.fillStyle = g;
+      c.fillRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4);
       c.restore();
     }
     c.strokeStyle = tone.edge ?? OUT;
     c.lineWidth = OUTW;
     path();
     c.stroke();
+  };
+  // tache douce (muscle, pli de tissu) sans contour
+  const soft = (pts: Pt[], color: string, alpha: number): void => {
+    c.save();
+    c.globalAlpha = alpha;
+    c.fillStyle = color;
+    smoothPath(c, pts);
+    c.fill();
+    c.restore();
   };
   const capsule = (a: Pt, b: Pt, ra: number, rb: number): Pt[] => {
     const th = Math.atan2(b[1] - a[1], b[0] - a[0]);
@@ -227,7 +226,7 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
 
   const parts: Part[] = [];
   const u = U;
-  const MUSC = '#b07040';
+  const MUSC = 'rgba(70,38,22,0.5)';
   const muscle = (a: Pt, b: Pt, t0: number, t1: number, off: number): void => {
     const nx = -(b[1] - a[1]);
     const ny = b[0] - a[0];
@@ -299,12 +298,12 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
       const p = (x: number, y: number): Pt => proj(add(C, Mc([x, y, 0])));
       flat([p(-1.3, 0.05), p(-0.4, 0.3), p(0.4, 0.3), p(1.3, 0.05), p(1.25, -1.0), p(-1.25, -1.0)], TONE.skin);
       flat([p(-0.5, 0.3), p(0.5, 0.3), p(0.98, -0.35), p(0.9, -1.1), p(0.74, -2.0), p(-0.74, -2.0), p(-0.9, -1.1), p(-0.98, -0.35)], TONE.tank);
-      const L = '#2e3050';
-      line(p(0, 0.15), p(0, -1.9), L);
-      line(p(-0.7, -0.45), p(-0.25, -0.7), L);
-      line(p(0.7, -0.45), p(0.25, -0.7), L);
-      line(p(-0.8, -1.25), p(-0.78, -1.9), L);
-      line(p(0.8, -1.25), p(0.78, -1.9), L);
+      for (const sg of [-1, 1]) {
+        soft([p(sg * 0.1, -0.2), p(sg * 0.6, -0.3), p(sg * 0.85, -0.7), p(sg * 0.5, -1.0), p(sg * 0.12, -0.7)], '#5a5d8a', 0.35); // omoplate
+        soft([p(sg * 0.85, -0.8), p(sg * 0.95, -1.2), p(sg * 0.8, -1.9), p(sg * 0.6, -1.5), p(sg * 0.7, -1.1)], '#000000', 0.3); // flanc
+        soft([p(sg * 0.7, 0.28), p(sg * 1.25, 0.0), p(sg * 1.2, -0.45), p(sg * 0.8, -0.2)], TONE.skin.light, 0.35); // deltoïde
+      }
+      line(p(0, 0.15), p(0, -1.95), '#050610');
     },
   });
 
@@ -368,58 +367,30 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
   for (const p of parts) p.draw();
 }
 
-// ---------- rendu en pixels durs ----------
-const PX = 2;
-const SW = 84;
-const SH = 132;
+// ---------- rendu ----------
+// Haute définition : un pixel du dessin = un pixel de la scène (ce n'est plus du gros pixel).
+const PX = 1;
+const SW = 168;
+const SH = 264;
 const OX = CX - (SW * PX) / 2;
 const OY = FEET - SH * PX + 10;
 
-const hex = (h: string): [number, number, number] => {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
-const PALETTE: [number, number, number][] = [...Object.values(TONE as Record<string, { base: string; shade: string; light?: string; edge?: string }>).flatMap((t) => [t.base, t.shade, ...(t.light ? [t.light] : []), ...(t.edge ? [t.edge] : [])]), '#b07040', OUT, GOLD, SOLE].map(hex);
-
 let work: HTMLCanvasElement | null = null;
 
-// Dessine le squelette dans `c` en pixel art (une grille de gros pixels, palette réduite, contours pleins).
 export function drawRigPixel(c: Ctx, r: Rig): void {
   if (!work) {
     work = document.createElement('canvas');
     work.width = SW;
     work.height = SH;
   }
-  const wc = work.getContext('2d', { willReadFrequently: true })!;
+  const wc = work.getContext('2d')!;
   wc.setTransform(1, 0, 0, 1, 0, 0);
   wc.clearRect(0, 0, SW, SH);
   wc.setTransform(1 / PX, 0, 0, 1 / PX, -OX / PX, -OY / PX);
   drawRig(wc, r, PX);
   wc.setTransform(1, 0, 0, 1, 0, 0);
-  const img = wc.getImageData(0, 0, SW, SH);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] < 120) {
-      d[i + 3] = 0;
-      continue;
-    }
-    d[i + 3] = 255;
-    let best = 0;
-    let bd = 1e9;
-    for (let p = 0; p < PALETTE.length; p++) {
-      const e = (d[i] - PALETTE[p][0]) ** 2 + (d[i + 1] - PALETTE[p][1]) ** 2 + (d[i + 2] - PALETTE[p][2]) ** 2;
-      if (e < bd) {
-        bd = e;
-        best = p;
-      }
-    }
-    d[i] = PALETTE[best][0];
-    d[i + 1] = PALETTE[best][1];
-    d[i + 2] = PALETTE[best][2];
-  }
-  wc.putImageData(img, 0, 0);
   c.save();
-  c.imageSmoothingEnabled = false;
+  c.imageSmoothingEnabled = true;
   c.drawImage(work, OX, OY, SW * PX, SH * PX);
   c.restore();
 }

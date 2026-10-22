@@ -4,3 +4,7 @@ dist/
 analyse/
 *.nes
 *.zip
+
+public/_ref.jpg
+sheet.html
+sheet2.html

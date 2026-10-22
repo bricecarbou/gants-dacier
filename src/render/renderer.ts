@@ -6,7 +6,8 @@ import { pixelText } from './font';
 import { Hud } from './hud';
 import { drawOpponent } from './oppDraw';
 import { type OppPose, computePose } from './oppPose';
-import { PL_FEET, drawPlayer, playerState } from './plDraw';
+import { PL_FEET, playerState } from './plDraw';
+import { drawRigPixel, rigFromPose } from './plRig';
 import { LH, LS, LW } from './view';
 import { type Ctx, starPath } from './vec';
 
@@ -165,7 +166,7 @@ export class Renderer {
       t.translate(CX, PL_FEET);
       t.scale(PL_K, PL_K);
       t.translate(-CX, -PL_FEET);
-      drawPlayer(t, ps.pose);
+      drawRigPixel(t, rigFromPose(ps.pose));
       t.restore();
     };
     const paintOpp = () => {

@@ -11,7 +11,7 @@ import { type Ctx, LINE, capsulePath, dot, ellPath, mix, polyPath, smoothPath, s
 const CX = 144;
 export const PL_FEET = 424; // ligne des pieds à l'écran
 export const PL_JUMP_HEAD = 30; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher son visage)
-const HIP_H = 62; // hauteur du bassin au-dessus des pieds
+const HIP_H = 64; // hauteur du bassin au-dessus des pieds
 const N1 = 30; // segments du bras (constants)
 const N2 = 36;
 const LEG1 = 26;
@@ -193,7 +193,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const up = new Xf(base[0], base[1], lean, 1 - 0.12 * Math.abs(tw), 1);
   const shift = 5 * tw;
   const tx = (x: number, y: number): Pt => up.p(x + shift, y);
-  const S: [Pt, Pt] = [tx(-21 - 2 * Math.max(0, -tw), -25), tx(21 + 2 * Math.max(0, tw), -25)];
+  const S: [Pt, Pt] = [tx(-25 - 2 * Math.max(0, -tw), -25), tx(25 + 2 * Math.max(0, tw), -25)];
 
   // --- jambes : deux segments à longueur fixe, pieds posés (ils se replient quand il saute) ---
   const calmLeg = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
@@ -230,18 +230,18 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
 
   // --- dos : trapèzes, omoplates, colonne ---
   const back: Pt[] = [
-    tx(-5, -31), tx(5, -31), tx(12, -29), tx(21, -25), tx(20, -14), tx(15, -4), tx(13, 4), tx(-13, 4), tx(-15, -4), tx(-20, -14), tx(-21, -25), tx(-12, -29),
+    tx(-5, -31), tx(5, -31), tx(13, -29), tx(24, -25), tx(23, -14), tx(17, -4), tx(14, 4), tx(-14, 4), tx(-17, -4), tx(-23, -14), tx(-24, -25), tx(-13, -29),
   ];
   const t0 = tx(0, -31);
   const t1 = tx(0, 4);
   toon(c, () => smoothPath(c, back), SKIN, { lw: 2.1, shade: 6, hi: 4, grad: [t0[0] - 25, t0[1], t1[0] + 25, t1[1]] });
-  for (const s of [-1, 1] as const) toon(c, () => ellPath(c, up, s * 21 + shift, -24, 6.6, 7.6), SKIN, { lw: 1.9, shade: 4, hi: 3 });
+  for (const s of [-1, 1] as const) toon(c, () => ellPath(c, up, s * 24 + shift, -24, 7.6, 8.4), SKIN, { lw: 1.9, shade: 4, hi: 3 });
   const DARK = mix(SKIN.base, '#3a1648', 0.55);
   stroke(c, [tx(0, -30), tx(0, 4)], DARK, 1.4, 0.75);
   for (const s of [-1, 1] as const) stroke(c, [tx(s * 4, -22), tx(s * 11, -17), tx(s * 8, -8)], DARK, 1.4, 0.6);
 
   // --- débardeur sombre : bretelles sur les épaules, dos échancré, liseré cyan ---
-  toon(c, () => smoothPath(c, [tx(-12, -29), tx(-5, -28), tx(0, -17), tx(5, -28), tx(12, -29), tx(15, -22), tx(15, -4), tx(13, 3), tx(-13, 3), tx(-15, -4), tx(-15, -22)]), TANK, { lw: 1.9, shade: 4, hi: 2 });
+  toon(c, () => smoothPath(c, [tx(-13, -29), tx(-5, -28), tx(0, -17), tx(5, -28), tx(13, -29), tx(17, -22), tx(17, -4), tx(14, 3), tx(-14, 3), tx(-17, -4), tx(-17, -22)]), TANK, { lw: 1.9, shade: 4, hi: 2 });
   stroke(c, [tx(-13, 1), tx(13, 1)], '#38c9e6', 1.6, 0.9);
 
   // --- cou + tête de dos : cheveux courts à épis, bandeau doré, mèches néon ---
@@ -262,8 +262,6 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   polyPath(c, [hp(-11.5, 1.5), hp(11.5, 1.5), hp(11.5, 4.4), hp(-11.5, 4.4)]);
   c.fill();
   c.restore();
-  stroke(c, [hp(-4, -14), hp(-5, -6)], '#52e2ff', 1.5, 0.9);
-  stroke(c, [hp(3, -15), hp(4, -7)], '#52e2ff', 1.5, 0.9);
   stroke(c, [hp(10, 3), hp(18, 9)], GOLD, 2.2);
   stroke(c, [hp(10, 3), hp(15, 15)], GOLD, 2.2);
 
@@ -278,10 +276,10 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
     // garde au repos : coudes bas et sortis le long de la taille, avant-bras relevés, gants à hauteur d épaule près du cou
     const wob = bq * s;
-    let gx = s * (21 - 1.2 * wob * calm);
-    let gy = -33 - 3.5 * wob * calm; // un gant monte pendant que l'autre descend
-    let ex = s * 29;
-    let ey = -9;
+    let gx = s * (23 - 1.2 * wob * calm);
+    let gy = -43 - 3.5 * wob * calm; // un gant monte pendant que l'autre descend
+    let ex = s * 35;
+    let ey = -5;
     const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {
       gx = lerp(gx, tgx, w);
       gy = lerp(gy, tgy, w);
@@ -294,7 +292,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     mixTo(pose.win, s * 20, -106, s * 25, -68); // victoire : les deux bras tendus, gants au-dessus de la tête
     mixTo(pose.down, s * 24, 14, s * 27, 2); // K.O. : accroupi, gants près du sol
     const gw = tx(gx, gy);
-    const guard = { x: gw[0], y: gw[1], r: lerp(9.5, 6.2, calm) }; // au repos les gants se voient à peine
+    const guard = { x: gw[0], y: gw[1], r: lerp(9.5, 7.6, calm) }; // au repos les gants se voient à peine
     let g = guard;
     const eg = tx(ex, ey);
     let el: Pt = eg;
@@ -336,8 +334,9 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
       c.fill();
       c.restore();
     }
-    toonGroup(c, [() => capsulePath(c, sh, el, 7, 5.8), () => capsulePath(c, el, [g.x, g.y], 5.6, 4.8), () => ellPath(c, null, el[0], el[1], 5.8, 5.8)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
-    drawGlove(c, g, el, s === -1 ? 1 : -1, GLOVE_B, CUFF);
+    if (calm > 0.5) drawGlove(c, g, el, s === -1 ? 1 : -1, GLOVE_B, CUFF);
+    toonGroup(c, [() => capsulePath(c, sh, el, 8.4, 7), () => capsulePath(c, el, [g.x, g.y], 6.8, 5.8), () => ellPath(c, null, el[0], el[1], 7, 7)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
+    if (calm <= 0.5) drawGlove(c, g, el, s === -1 ? 1 : -1, GLOVE_B, CUFF);
   }
   void dot;
   c.restore();

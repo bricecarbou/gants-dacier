@@ -271,12 +271,12 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    // garde de boxeur vue de dos : avant-bras presque verticaux, gants à hauteur d'oreille juste à l'extérieur de la tête, coudes rentrés
+    // garde au repos : gants à hauteur de poitrine, collés aux flancs, coudes rentrés
     const wob = pose.bob * s;
-    let gx = s * 23;
-    let gy = -52 - 1.6 * wob * calm;
-    let ex = s * 27;
-    let ey = -12;
+    let gx = s * 19;
+    let gy = -35 - 1.6 * wob * calm;
+    let ex = s * 23;
+    let ey = -9;
     const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {
       gx = lerp(gx, tgx, w);
       gy = lerp(gy, tgy, w);

@@ -1,6 +1,9 @@
 import { Opponent } from '../game/opponent';
 import { type Pattern } from '../game/patterns';
-import { type Pt, Xf, clamp01, easeOut, lerp, reach } from './rig';
+import { type Pt, Xf, clamp01, easeOut, easeOutBack, lerp, reach } from './rig';
+
+// frappe : départ explosif puis freinage net (plus incisif qu'un ralentissement doux)
+const snapOut = (k: number): number => 1 - Math.pow(1 - clamp01(k), 4);
 
 // Pose de « Braze » (l'adversaire) calculée à partir de son état : squelette (bassin, buste qui se penche et pivote,
 // tête qui bascule, bras et jambes à longueur fixe, pieds posés au sol). Le dessin vectoriel est dans oppDraw.ts.
@@ -81,8 +84,8 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
 
   const tpRaw = o.state === 'telegraph' && p ? clamp01(1 - o.timer / p.telegraphMs) : o.state === 'attack' ? 1 : 0;
   const apRaw = o.state === 'attack' && p ? clamp01(1 - o.timer / p.attackMs) : 0;
-  const tc = easeOut(tpRaw); // armement continu
-  const kc = easeOut(apRaw); // frappe continue
+  const tc = easeOutBack(tpRaw); // armement : il se charge, avec un léger recul d'élan
+  const kc = snapOut(apRaw); // frappe : départ explosif
   let expr: Expr = 'calm';
   if (o.state === 'telegraph') expr = 'angry';
   else if (o.state === 'attack') expr = 'shout';
@@ -221,8 +224,8 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
   } else if ((o.state === 'telegraph' || o.state === 'attack') && p) {
     front = s;
     glow = kind === 'uppercut' ? [0, 1] : [ai];
-    const t = o.state === 'telegraph' ? easeOut(tp) : 1; // armement
-    const k = o.state === 'attack' ? easeOut(ap) : 0; // frappe
+    const t = o.state === 'telegraph' ? easeOutBack(tp) : 1; // armement
+    const k = o.state === 'attack' ? snapOut(ap) : 0; // frappe
     if (kind === 'direct') {
       const wind: G = { x: CX + s * 72, y: 150, r: 15 };
       const hit: G = strikeEnd(p).g;
@@ -403,6 +406,9 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
       front = s;
     }
   }
+
+  // secousse à l'impact : le corps encaisse le choc de son propre coup
+  if (o.state === 'attack' && ap > 0.9) dx += Math.floor(now / 35) % 2 ? 2 : -2;
 
   // --- jeu de jambes : il se déplace (décalage, approche/recul), penche le buste dans le mouvement, marche ---
   dx += o.fx;

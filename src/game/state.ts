@@ -27,6 +27,7 @@ export interface Impact {
 }
 
 export interface MatchRecord {
+  best?: number; // meilleur score
   wins: number;
   losses: number;
   draws: number;
@@ -45,11 +46,11 @@ const STORAGE_KEY = 'boxe-record';
 function loadRecord(): MatchRecord {
   try {
     const r = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-    if (r && typeof r.wins === 'number') return r;
+    if (r && typeof r.wins === 'number') return { best: 0, ...r };
   } catch {
     /* stockage indisponible */
   }
-  return { wins: 0, losses: 0, draws: 0 };
+  return { best: 0, wins: 0, losses: 0, draws: 0 };
 }
 
 function saveRecord(r: MatchRecord): void {
@@ -78,6 +79,21 @@ export class Game {
   private pending: Action[] = [];
   private punches: { t: number; hand: Side; target: Target }[] = []; // coups lancés, pas encore arrivés
   record: MatchRecord = loadRecord();
+  score = 0; // points du match
+  combo = 0; // coups portés d'affilée sans en prendre
+
+  // Points : un enchaînement de coups rapporte de plus en plus.
+  private award(base: number): void {
+    const mult = 1 + Math.min(this.combo, 6) * 0.25;
+    this.score += Math.round((base * mult) / 10) * 10;
+  }
+
+  // Un coup de plus dans l'enchaînement : on l'annonce à partir de 2, et la foule s'excite à partir de 4.
+  private bump(): void {
+    this.combo++;
+    if (this.combo >= 2) this.say(`COMBO x${this.combo}`, 180, 215, this.combo >= 4 ? '#ff7b2e' : '#ffd23f');
+    if (this.combo >= 4) this.cheerT = Math.max(this.cheerT, 700);
+  }
   private resultAge = 0;
 
   constructor(
@@ -178,6 +194,8 @@ export class Game {
   private startMatch(): void {
     this.round = 1;
     this.outcome = null;
+    this.score = 0;
+    this.combo = 0;
     this.player.resetMatch();
     this.opponent.resetMatch();
     this.startRound(false);
@@ -280,6 +298,8 @@ export class Game {
       const r = o.counterHit(dmg);
       this.audio.play('hit');
       this.impact('counter', x, y, upper ? 'PARADE !' : 'CONTRE !');
+      this.award(300);
+      this.bump();
       this.shake(200, 4);
       this.hitStop = H.counter;
       this.cheerT = 800;
@@ -299,6 +319,7 @@ export class Game {
       this.audio.play('block');
       this.impact('block', x, y, 'CLANG');
       o.guardT = 320;
+      this.combo = 0; // frapper la garde casse l'enchaînement
       this.shake(90, 2);
       if (!o.riposting && (o.state === 'idle' || o.state === 'telegraph')) this.riposte(hand);
       return;
@@ -306,6 +327,8 @@ export class Game {
     if (counter) pl.counterT = 0;
     this.audio.play('hit');
     this.impact(counter ? 'counter' : 'hit', x, y, counter ? 'CONTRE !' : HIT_WORDS[Math.floor(Math.random() * HIT_WORDS.length)]);
+    this.award(counter ? 300 : 100);
+    this.bump();
     this.shake(counter ? 160 : 90, counter ? 4 : 2);
     this.hitStop = counter ? H.counter : H.hit;
     this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, counter ? '#7df9ff' : '#ffffff');
@@ -323,6 +346,8 @@ export class Game {
     const r = this.opponent.superHit(S.damage, S.staggerMs);
     this.audio.play('ko');
     this.impact('super', 180, 230, 'SUPER !');
+    this.award(500);
+    this.bump();
     this.shake(380, 8);
     this.hitStop = H.super;
     this.flashT = 200;
@@ -340,6 +365,7 @@ export class Game {
       pl.counterT = P.counterWindowMs;
       this.audio.play('dodge');
       this.say('ESQUIVE !', 180 + pl.dodgeOffset * 1.25, 450, '#7df9ff');
+      this.award(50);
       this.gainMeter(S.dodgeGain);
       return;
     }
@@ -353,6 +379,7 @@ export class Game {
       this.shake(120, 3);
       this.hitStop = H.hit * 2;
       this.say(`-${chip}`, 180, 365, '#ffffff');
+      this.award(20);
       if (pl.hp <= 0) this.endByKo('ko-loss');
       return;
     }
@@ -361,6 +388,7 @@ export class Game {
     }
     if (!dir && pl.sinceDodge < 380) this.say('TROP TÔT !', 180, 440, '#ffb347'); // l'esquive s'est terminée juste avant le coup
     pl.takeHit(p.damage);
+    this.combo = 0; // être touché casse l'enchaînement
     this.punches = []; // les coups en l'air sont annulés
     this.audio.play('hurt');
     this.impact('hurt', 180, 410, 'BOOM!');
@@ -399,6 +427,8 @@ export class Game {
     if (this.outcome === 'ko-win' || this.outcome === 'points-win') this.record.wins++;
     else if (this.outcome === 'draw') this.record.draws++;
     else this.record.losses++;
+    if (this.outcome === 'ko-win' || this.outcome === 'points-win') this.score += Math.round(this.player.hpRatio * 500 / 10) * 10 + (this.outcome === 'ko-win' ? 1000 : 0); // bonus de victoire
+    if (this.score > (this.record.best ?? 0)) this.record.best = this.score;
     saveRecord(this.record);
     this.phase = 'result';
     this.resultAge = 0;

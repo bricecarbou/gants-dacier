@@ -123,6 +123,14 @@ export class Renderer {
       const m = game.shakeMag * LS * Math.min(1, game.shakeT / 200);
       w.translate(even((Math.random() - 0.5) * 2 * m), even((Math.random() - 0.5) * 2 * m));
     }
+    // petit zoom de caméra sur les gros impacts (contre, super)
+    let zoom = 1;
+    for (const im of game.impacts) if (im.kind === 'counter' || im.kind === 'super') zoom = Math.max(zoom, 1 + (im.kind === 'super' ? 0.05 : 0.03) * Math.max(0, 1 - im.t / 220));
+    if (zoom > 1) {
+      w.translate(LW / 2, 300);
+      w.scale(zoom, zoom);
+      w.translate(-LW / 2, -300);
+    }
     w.imageSmoothingEnabled = false;
     w.drawImage(this.arena, 0, 0, LW, LH);
     // la foule saute quand ça chauffe (contre, super, K.O.)

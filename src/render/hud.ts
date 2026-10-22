@@ -93,6 +93,7 @@ export class Hud {
     c.fillStyle = INK;
     c.fillRect(0, 46, LW, 2);
 
+    pixelText(c, `PTS ${g.score}`, 8, 52, { size: 8, color: '#ffffff' });
     // étoile = super prêt, cœur = nombre de coups que l'endurance permet encore
     const punches = Math.floor(g.player.stamina / CONFIG.player.punchCost);
     this.cell(c, 6, 6, 94, 34);
@@ -270,6 +271,7 @@ export class Hud {
       pixelText(c, label, x + w / 2, by + 9, { size: 16, color: on ? '#ffffff' : '#6d6890', outline: null }, 'center');
     });
     if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 470, { size: 16, color: '#ffffff' }, 'center');
+    if ((g.record.best ?? 0) > 0) pixelText(c, `MEILLEUR ${g.record.best}`, MID, 482, { size: 8, color: '#ffd23f' }, 'center');
     pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 496, { size: 16, color: '#8d88a8', outline: null }, 'center');
   }
 }

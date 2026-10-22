@@ -28,8 +28,8 @@ export const CONFIG = {
     riposteDamage: 14, // l'adversaire bloque puis contre si on frappe sa garde
     riposteTelegraphMs: 340, // ... mais son contre se prépare : on peut l'esquiver
     punchCooldownMs: 380,
-    punchAnimMs: 300,
-    punchArriveMs: 130, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
+    punchAnimMs: 270,
+    punchArriveMs: 110, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
     punchDamage: { head: 5, body: 3 },
     dodgeActiveMs: 620, // durée pendant laquelle l'esquive protège (grosse esquive : 100 %, petite : environ 60 %)
     dodgeCooldownMs: 180,

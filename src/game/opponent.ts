@@ -76,8 +76,17 @@ export class Opponent extends Fighter {
   private pickPattern(): Pattern {
     const id: string = O.sequence[this.seqIndex % O.sequence.length];
     this.seqIndex++;
-    if (Math.random() < O.variationChance) return PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
-    return PATTERNS.find((p) => p.id === id) ?? PATTERNS[0];
+    if (Math.random() < O.variationChance) return this.vary(PATTERNS[Math.floor(Math.random() * PATTERNS.length)]);
+    const base = PATTERNS.find((p) => p.id === id) ?? PATTERNS[0];
+    return this.vary(base);
+  }
+
+  // Une même attaque n'a pas toujours le même rythme : plus sèche ou plus appuyée (la fenêtre d'esquive reste lisible).
+  private vary(p: Pattern): Pattern {
+    const snap = Math.random() < 0.28; // coup « incisif » : départ et frappe plus rapides
+    const t = snap ? 0.86 : 0.95 + Math.random() * 0.2;
+    const a = snap ? 0.8 : 0.92 + Math.random() * 0.2;
+    return { ...p, telegraphMs: Math.round(p.telegraphMs * t), attackMs: Math.round(p.attackMs * a) };
   }
 
   // Jeu de jambes : cibles de position selon ce qu'il fait, puis déplacement amorti.

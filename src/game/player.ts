@@ -40,7 +40,7 @@ export class Player extends Fighter {
 
   private ramp(): number {
     if (!this.dodge) return 0;
-    const r = 110;
+    const r = 80; // départ et retour d'esquive plus nets
     return Math.max(0, Math.min(this.dodge.t / r, (this.dodge.ms - this.dodge.t) / r, 1));
   }
 

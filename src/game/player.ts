@@ -110,9 +110,9 @@ export class Player extends Fighter {
   tryDodge(dir: DodgeDir, power = 1): boolean {
     if (this.stun > 0 || this.dodgeCd > 0 || this.superAnim) return false;
     const pw = Math.max(0.3, Math.min(1, power));
-    const ms = P.dodgeActiveMs * (0.68 + 0.42 * pw);
+    const ms = P.dodgeActiveMs * (0.85 + 0.3 * pw); // une esquive couvre presque tout l'intervalle entre le signal et l'impact
     this.dodge = { dir, t: 0, power: pw, ms };
-    this.dodgeCd = ms + P.dodgeCooldownMs * (0.6 + 0.8 * pw);
+    this.dodgeCd = 340 + P.dodgeCooldownMs * (0.6 + 0.8 * pw); // on peut corriger son esquive sans attendre la fin de la précédente
     return true;
   }
 

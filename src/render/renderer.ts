@@ -197,7 +197,7 @@ export class Renderer {
       w.fillRect(0, 0, LW, LH);
     } else {
       this.frontEffects(w, game, pose, now, ps.x);
-      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertStar(w, pose, sigColor, tp);
+      if (o.state === 'telegraph' && o.pattern && o.pattern.telegraphMs - o.timer < 380) this.alertStar(w, pose, sigColor, tp); // le « ! » marque l'appel du coup, tout de suite
     }
     w.restore();
 

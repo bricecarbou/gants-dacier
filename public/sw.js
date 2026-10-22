@@ -1,6 +1,6 @@
 // Service worker : précache de l'app au premier chargement, puis cache d'abord (hors-ligne),
 // avec mise à jour en arrière-plan. Incrémenter CACHE pour forcer le renouvellement.
-const CACHE = 'boxe-v50';
+const CACHE = 'boxe-v51';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

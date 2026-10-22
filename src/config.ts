@@ -31,7 +31,7 @@ export const CONFIG = {
     punchAnimMs: 270,
     punchArriveMs: 110, // le gant met ce temps à atteindre l'adversaire : le coup porte à l'arrivée
     punchDamage: { head: 5, body: 3 },
-    dodgeActiveMs: 620, // durée pendant laquelle l'esquive protège (grosse esquive : 100 %, petite : environ 60 %)
+    dodgeActiveMs: 1000, // durée pendant laquelle l'esquive protège (grosse esquive : 100 %, petite : environ 60 %)
     dodgeCooldownMs: 180,
     dodgeShiftPx: 70,
     hitStunMs: 450,
@@ -55,11 +55,12 @@ export const CONFIG = {
   opponent: {
     maxHp: 200,
     hitStunMs: 220,
-    cueMs: 650, // le signal d'esquive (clignotement) démarre ce temps avant l'impact : esquiver à ce moment protège jusqu'au coup
+    cueMs: 1000, // le signal d'esquive (clignotement) démarre ce temps avant l'impact : esquiver à ce moment protège jusqu'au coup
     idleMs: { min: 950, max: 1550 },
     idleScalePerRound: 0.9, // l'adversaire s'enchaîne plus vite à chaque round
     // ids des coups (voir patterns.ts) : ordre apprenable
     sequence: ['jab-droit', 'direct-gauche', 'crochet-gauche', 'direct-droit', 'un-deux', 'foie-droit', 'jab-gauche', 'crochet-droit', 'marteau-gauche', 'remontant', 'direct-droit', 'foie-gauche', 'marteau-droit', 'direct-gauche'],
+    telegraphScale: 0.58, // le signal d'un coup est plus court : l'adversaire est plus direct (appel de coup puis coup, sans temps mort)
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre
   },
   fight: {

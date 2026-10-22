@@ -100,7 +100,7 @@ export class Opponent extends Fighter {
     const snap = Math.random() < 0.28; // coup « incisif » : départ et frappe plus rapides
     const t = snap ? 0.86 : 0.95 + Math.random() * 0.2;
     const a = snap ? 0.8 : 0.92 + Math.random() * 0.2;
-    return { ...p, telegraphMs: Math.round(p.telegraphMs * t), attackMs: Math.round(p.attackMs * a) };
+    return { ...p, telegraphMs: Math.round(p.telegraphMs * t * O.telegraphScale), attackMs: Math.round(p.attackMs * a) };
   }
 
   // Jeu de jambes : cibles de position selon ce qu'il fait, puis déplacement amorti.

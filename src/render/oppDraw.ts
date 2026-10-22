@@ -97,52 +97,53 @@ export function drawOpponent(c: Ctx, pose: OppPose): void {
   // ---- jambes : deux segments à longueur fixe, pieds posés au sol ----
   for (const s of [-1, 1] as const) {
     const foot = s === -1 ? pose.fl : pose.fr;
-    const fx = CX + s * (30 + foot[0] * s);
+    const fx = CX + s * (26 + foot[0] * s);
     const fy = GROUND - foot[1];
-    const hip: Pt = [base[0] + s * 22, base[1] + 8];
+    const hip: Pt = [base[0] + s * 18, base[1] + 8];
     const ankle: Pt = [fx, fy - 8];
     const knee = ik(hip, ankle, LEG1, LEG2, s, 0.15);
-    toonGroup(c, [() => capsulePath(c, hip, knee, 12.5, 10.5), () => capsulePath(c, knee, ankle, 9.8, 7.8)], SKIN, { lw: 2.4 });
+    toonGroup(c, [() => capsulePath(c, hip, knee, 10, 8.4), () => capsulePath(c, knee, ankle, 8, 6.4)], SKIN, { lw: 2.4 });
     const sockA: Pt = [lerp(knee[0], ankle[0], 0.6), lerp(knee[1], ankle[1], 0.6)];
-    toon(c, () => capsulePath(c, sockA, [ankle[0], ankle[1] + 1], 8.6, 8.2), CUFF, { lw: 2 });
-    toonGroup(c, [() => ellPath(c, null, fx + s * 1.5, fy, 18, 8.8)], BOOT, { lw: 2.4 });
+    toon(c, () => capsulePath(c, sockA, [ankle[0], ankle[1] + 1], 7, 6.7), CUFF, { lw: 2 });
+    toonGroup(c, [() => ellPath(c, null, fx + s * 1.5, fy, 15.5, 7.6)], BOOT, { lw: 2.4 });
     stroke(c, [[fx - 14, fy + 4.5], [fx, fy + 6.5], [fx + 14, fy + 4.5]], '#f4efe2', 1.6, 0.9);
     dot(c, fx - 6, fy - 3.5, 1.6, '#8a86b8', 0.9);
   }
 
   // ---- short + ceinture (suit le bassin) ----
   const pel = new Xf(base[0], base[1], pose.lean * 0.45, 1, 1);
-  toon(c, () => smoothPath(c, pel.pts([[-43, -14], [43, -14], [51, 20], [19, 34], [6, 21], [-6, 21], [-19, 34], [-51, 20]])), SHORTS, { lw: 2.4 });
+  toon(c, () => smoothPath(c, pel.pts([[-36, -14], [36, -14], [42, 20], [16, 34], [5, 21], [-5, 21], [-16, 34], [-42, 20]])), SHORTS, { lw: 2.4 });
   for (const s of [-1, 1] as const) {
     c.save();
     c.fillStyle = GOLD;
-    polyPath(c, pel.pts([[s * 49, 2], [s * 42, 2], [s * 38, 30], [s * 47, 29]]));
+    polyPath(c, pel.pts([[s * 41, 2], [s * 35, 2], [s * 32, 30], [s * 39, 29]]));
     c.fill();
     c.restore();
   }
   stroke(c, [pel.p(0, -12), pel.p(0, 22)], mix(SHORTS.base, '#2a0710', 0.5), 1.8, 0.8);
-  toon(c, () => polyPath(c, pel.pts([[-46, -26], [46, -26], [46, -10], [-46, -10]])), CUFF, { lw: 2.2 });
-  stroke(c, [pel.p(-44, -18), pel.p(44, -18)], GOLD, 3.4);
+  toon(c, () => polyPath(c, pel.pts([[-38, -26], [38, -26], [38, -10], [-38, -10]])), CUFF, { lw: 2.2 });
+  stroke(c, [pel.p(-36, -18), pel.p(36, -18)], GOLD, 3);
 
-  // ---- torse : V cartoon ----
+  // ---- torse : V cartoon, plus élancé (x réduit) ----
+  const txn = (x: number, y: number): Pt => tx(x * 0.8, y);
   const torso: Pt[] = [
-    tx(-14, -134), tx(14, -134), tx(30, -127), tx(48, -119), tx(55, -100), tx(51, -72), tx(43, -42), tx(37, -14), tx(34, -4),
-    tx(-34, -4), tx(-37, -14), tx(-43, -42), tx(-51, -72), tx(-55, -100), tx(-48, -119), tx(-30, -127),
+    txn(-14, -134), txn(14, -134), txn(30, -127), txn(48, -119), txn(55, -100), txn(51, -72), txn(43, -42), txn(37, -14), txn(34, -4),
+    txn(-34, -4), txn(-37, -14), txn(-43, -42), txn(-51, -72), txn(-55, -100), txn(-48, -119), txn(-30, -127),
   ];
-  const tops = tx(0, -134);
-  const bot = tx(0, -4);
+  const tops = txn(0, -134);
+  const bot = txn(0, -4);
   toon(c, () => smoothPath(c, torso), SKIN, { lw: 2.6, shade: 9, hi: 6, grad: [tops[0] - 40, tops[1], bot[0] + 40, bot[1]] });
   // pectoraux, abdos, creux du sternum : traits fins, ombrés
   const DARK = mix(SKIN.base, '#3a1648', 0.55);
   for (const s of [-1, 1] as const) {
-    stroke(c, [tx(s * 4, -90), tx(s * 20, -82), tx(s * 40, -92)], DARK, 2, 0.75);
-    stroke(c, [tx(s * 44, -112), tx(s * 38, -98), tx(s * 40, -92)], DARK, 1.6, 0.4);
-    for (const y of [-64, -49, -34]) stroke(c, [tx(s * 3, y), tx(s * 8, y + 3), tx(s * 15, y)], DARK, 1.8, 0.7);
-    dot(c, ...tx(s * 24, -99), 1.8, mix(SKIN.base, '#7a2f2a', 0.55), 0.8);
+    stroke(c, [txn(s * 4, -90), txn(s * 20, -82), txn(s * 40, -92)], DARK, 2, 0.75);
+    stroke(c, [txn(s * 44, -112), txn(s * 38, -98), txn(s * 40, -92)], DARK, 1.6, 0.4);
+    for (const y of [-64, -49, -34]) stroke(c, [txn(s * 3, y), txn(s * 8, y + 3), txn(s * 15, y)], DARK, 1.8, 0.7);
+    dot(c, ...txn(s * 24, -99), 1.8, mix(SKIN.base, '#7a2f2a', 0.55), 0.8);
   }
-  stroke(c, [tx(0, -104), tx(0, -8)], DARK, 1.8, 0.7);
-  stroke(c, [tx(-12, -122), tx(-34, -116)], DARK, 1.6, 0.55);
-  stroke(c, [tx(12, -122), tx(34, -116)], DARK, 1.6, 0.55);
+  stroke(c, [txn(0, -104), txn(0, -8)], DARK, 1.8, 0.7);
+  stroke(c, [txn(-12, -122), txn(-34, -116)], DARK, 1.6, 0.55);
+  stroke(c, [txn(12, -122), txn(34, -116)], DARK, 1.6, 0.55);
 
   // ---- cou + tête ----
   const nk = up.p(shift, -132);
@@ -204,7 +205,7 @@ export function drawOpponent(c: Ctx, pose: OppPose): void {
     const tr = pose.trail.filter((t) => t.side === side);
     for (let i = 0; i < tr.length; i++) smear(c, tr[i], i + 1 < tr.length ? tr[i + 1] : g, 0.16);
     for (const t of tr) ghostGlove(c, t, 0.2);
-    toonGroup(c, [() => ellPath(c, null, sh[0], sh[1], 16.5, 17.5), () => capsulePath(c, sh, el, 13, 11), () => capsulePath(c, el, wrist, 11, 9.6), () => ellPath(c, null, el[0], el[1], 10.8, 10.8)], SKIN, { lw: 2.4, shade: 7, hi: 4.5 });
+    toonGroup(c, [() => ellPath(c, null, sh[0], sh[1], 13, 14), () => capsulePath(c, sh, el, 10, 8.4), () => capsulePath(c, el, wrist, 8.4, 7.4), () => ellPath(c, null, el[0], el[1], 8.4, 8.4)], SKIN, { lw: 2.4, shade: 7, hi: 4.5 });
     stroke(c, [[sh[0] + (side === 0 ? 4 : -4), sh[1] - 8], [lerp(sh[0], el[0], 0.5) + (side === 0 ? 4 : -4), lerp(sh[1], el[1], 0.5) - 4]], mix(SKIN.light, '#ffffff', 0.4), 2, 0.35);
     drawGlove(c, g, el, side === 0 ? 1 : -1);
   }

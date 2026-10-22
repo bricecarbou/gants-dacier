@@ -58,7 +58,7 @@ export function skeleton(px: number, py: number, lean: number, tw: number) {
   const up = new Xf(base[0], base[1], lean, 1 - 0.14 * Math.abs(tw), 1);
   const shift = 9 * tw;
   // l'épaule qui avance (côté de la rotation) s'écarte un peu
-  const S: [Pt, Pt] = [up.p(-45 + shift - 3 * Math.max(0, -tw), -103), up.p(45 + shift + 3 * Math.max(0, tw), -103)];
+  const S: [Pt, Pt] = [up.p(-38 + shift - 3 * Math.max(0, -tw), -103), up.p(38 + shift + 3 * Math.max(0, tw), -103)];
   return { base, up, shift, S };
 }
 

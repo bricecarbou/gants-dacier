@@ -102,7 +102,7 @@ export function toonGroup(c: Ctx, paths: PathFn[], t: Toon, o: { lw?: number; sh
   c.lineCap = 'round';
   // 1. contour : on trace chaque forme en trait épais (la moitié extérieure forme le contour)
   c.strokeStyle = t.line;
-  c.lineWidth = lw * 1.6;
+  c.lineWidth = lw * 1.35;
   for (const p of paths) {
     p();
     c.stroke();

@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import type { Input } from '../game/input';
 import type { Game } from '../game/state';
-import { buildArena } from './arenaVec';
+import { LOW_H, LOW_W, buildArenaLow } from './arenaPix';
 import { pixelText } from './font';
 import { Hud } from './hud';
 import { drawOpponent } from './oppDraw';
@@ -13,6 +13,7 @@ import { type Ctx, mix, starPath } from './vec';
 const CX = LW / 2;
 const OPP_K = 0.76; // l'adversaire est tracé à 76 % de sa taille (environ 40 % de la hauteur de l'écran)
 const OPP_PIVOT = 372; // ligne des pieds : point fixe de la mise à l'échelle
+const PL_K = 1.2; // Nova est un peu plus grand : proportions de combat de console (environ 1/4 de l'écran)
 
 // Passe un point du sprite de l'adversaire à l'écran (élan autour du bassin, puis échelle autour des pieds).
 function oppPt(pose: { dx: number; dy: number; sc: number }, x: number, y: number): [number, number] {
@@ -29,13 +30,17 @@ function rngf(seed: number): () => number {
   };
 }
 
+const even = (v: number) => Math.round(v / 2) * 2;
 const SIG: Record<string, string> = { jab: '#ffd23f', direct: '#ffd23f', hook: '#ff8a2e', overhand: '#ff8a2e', bodyhook: '#ff3b8a', uppercut: '#ff3b4e' };
 
-// Rendu vectoriel : tout est dessiné directement à la résolution de l'écran (aucune image pré-calculée), donc le mouvement est continu.
+// Rendu « console » : la scène est dessinée en vectoriel sur une petite image de 144 x 256 pixels, puis agrandie sans
+// lissage (gros pixels réguliers). Le texte et l'interface sont tracés par-dessus, nets.
 export class Renderer {
   private hud = new Hud();
   private c: CanvasRenderingContext2D;
-  private k = 1;
+  private u = 2; // pixels écran par unité interne
+  private low: HTMLCanvasElement;
+  private lc: CanvasRenderingContext2D;
   private arena: HTMLCanvasElement;
   private tmp: HTMLCanvasElement;
   private tc: CanvasRenderingContext2D;
@@ -46,14 +51,22 @@ export class Renderer {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.c = canvas.getContext('2d')!;
+    this.low = document.createElement('canvas');
+    this.low.width = LOW_W;
+    this.low.height = LOW_H;
+    this.lc = this.low.getContext('2d')!;
     this.tmp = document.createElement('canvas');
+    this.tmp.width = LOW_W;
+    this.tmp.height = LOW_H;
     this.tc = this.tmp.getContext('2d')!;
-    this.arena = buildArena(1);
+    const a = buildArenaLow();
+    this.arena = a.canvas;
+    this.canvas.style.imageRendering = 'pixelated';
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
 
-  // Letterboxing ; le tampon est à la résolution réelle de l'écran pour des traits nets.
+  // Letterboxing ; le tampon est un multiple entier de l'image interne : des pixels réguliers et nets.
   resize(): void {
     const { width: W, height: H } = CONFIG.view;
     const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
@@ -65,20 +78,17 @@ export class Renderer {
     s.left = `${Math.floor((window.innerWidth - w) / 2)}px`;
     s.top = `${Math.floor((window.innerHeight - h) / 2)}px`;
     const dpr = Math.min(3, window.devicePixelRatio || 1);
-    this.k = Math.max(1, (w * dpr) / LW);
-    this.canvas.width = Math.round(LW * this.k);
-    this.canvas.height = Math.round(LH * this.k);
-    this.tmp.width = this.canvas.width;
-    this.tmp.height = this.canvas.height;
-    this.arena = buildArena(this.k);
+    this.u = Math.max(1, Math.round((w * dpr) / LW));
+    this.canvas.width = LW * this.u;
+    this.canvas.height = LH * this.u;
   }
 
-  // Dessine `draw` sur un calque à part, le teinte (blanc de dégât, couleur du signal) puis le pose sur l'écran.
+  // Dessine `draw` sur un calque à part, le teinte (blanc de dégât, couleur du signal) puis le pose sur la scène.
   private tinted(c: Ctx, draw: (t: Ctx) => void, color: string, alpha: number, glow = 0): void {
     const t = this.tc;
     t.setTransform(1, 0, 0, 1, 0, 0);
-    t.clearRect(0, 0, this.tmp.width, this.tmp.height);
-    t.setTransform(this.k, 0, 0, this.k, 0, 0);
+    t.clearRect(0, 0, LOW_W, LOW_H);
+    t.setTransform(0.5, 0, 0, 0.5, 0, 0);
     t.imageSmoothingEnabled = true;
     draw(t);
     t.globalCompositeOperation = 'source-atop';
@@ -88,7 +98,7 @@ export class Renderer {
     c.save();
     if (glow > 0) {
       c.shadowColor = color;
-      c.shadowBlur = glow * this.k;
+      c.shadowBlur = glow * 0.5;
     }
     c.globalAlpha = alpha;
     c.drawImage(this.tmp, 0, 0, LW, LH);
@@ -104,24 +114,24 @@ export class Renderer {
   }
 
   draw(now: number, game: Game, input: Input): void {
-    const c = this.c;
     const dt = Math.min(100, this.last ? now - this.last : 16);
     this.last = now;
-    c.setTransform(this.k, 0, 0, this.k, 0, 0);
-    c.imageSmoothingEnabled = true;
-    c.imageSmoothingQuality = 'high';
-    c.save();
+    const w = this.lc;
+    w.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    w.save();
     if (game.shakeT > 0) {
       const m = game.shakeMag * LS * Math.min(1, game.shakeT / 200);
-      c.translate((Math.random() - 0.5) * 2 * m, (Math.random() - 0.5) * 2 * m);
+      w.translate(even((Math.random() - 0.5) * 2 * m), even((Math.random() - 0.5) * 2 * m));
     }
-    c.drawImage(this.arena, 0, 0, LW, LH);
+    w.imageSmoothingEnabled = false;
+    w.drawImage(this.arena, 0, 0, LW, LH);
     // la foule saute quand ça chauffe (contre, super, K.O.)
     if (game.cheerT > 0) {
-      const jump = Math.abs(Math.sin(now / 90)) * -4 * Math.min(1, game.cheerT / 500);
-      c.drawImage(this.arena, 0, 100 * this.k, LW * this.k, 130 * this.k, 0, 100 + jump, LW, 130);
+      const jump = even(Math.abs(Math.sin(now / 90)) * -6 * Math.min(1, game.cheerT / 500));
+      w.drawImage(this.arena, 0, 26, LOW_W, 100, 0, 52 + jump, LW, 200);
     }
-    this.crowdFlashes(c, now);
+    w.imageSmoothingEnabled = true;
+    this.crowdFlashes(w, now);
 
     const o = game.opponent;
     const { pose, tp } = computePose(o, now, o.guardT > 0);
@@ -130,8 +140,8 @@ export class Renderer {
 
     // calque arrière : aura de télégraphie, lignes de vitesse du super
     if (game.phase !== 'menu') {
-      if (o.state === 'telegraph') this.aura(c, tp, sigColor, now);
-      if (game.player.superAnim) this.speed(c, Math.floor(now / 45) + 99, '#7df9ff');
+      if (o.state === 'telegraph') this.aura(w, tp, sigColor, now);
+      if (game.player.superAnim) this.speed(w, Math.floor(now / 45) + 99, '#7df9ff');
     }
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
@@ -141,22 +151,25 @@ export class Renderer {
     const drawPl = (t: Ctx) => {
       t.save();
       t.translate(ps.x, ps.y);
+      t.translate(CX, PL_FEET);
+      t.scale(PL_K, PL_K);
+      t.translate(-CX, -PL_FEET);
       drawPlayer(t, ps.pose);
       t.restore();
     };
     const paintOpp = () => {
       const [shx] = oppPt(pose, CX, OPP_PIVOT);
-      this.shadow(c, shx, OPP_PIVOT + 2, 54 * pose.sc * OPP_K, 10);
-      if (flashOpp) this.tinted(c, drawOpp, '#ffffff', 0.92);
-      else drawOpp(c);
+      this.shadow(w, shx, OPP_PIVOT + 2, 54 * pose.sc * OPP_K, 10);
+      if (flashOpp) this.tinted(w, drawOpp, '#ffffff', 1);
+      else drawOpp(w);
       // signal d'esquive : la silhouette clignote dans la couleur du coup pendant les derniers instants avant l'impact
-      if (cue && Math.floor(now / 70) % 2 === 0) this.tinted(c, drawOpp, sigColor, 0.3, 14);
+      if (cue && Math.floor(now / 70) % 2 === 0) this.tinted(w, drawOpp, sigColor, 0.45, 14);
     };
     const paintPl = () => {
       if (game.phase === 'menu') return;
-      this.shadow(c, CX + ps.x, PL_FEET + 2, Math.max(12, 28 - ps.jump * 0.2), 5);
-      if (plFlash) this.tinted(c, drawPl, '#ffffff', 0.92);
-      else drawPl(c);
+      this.shadow(w, CX + ps.x, PL_FEET + 2, Math.max(14, 34 - ps.jump * 0.4), 6);
+      if (plFlash) this.tinted(w, drawPl, '#ffffff', 1);
+      else drawPl(w);
     };
     // quand le gant adverse arrive sur Nova, il passe devant lui : on le voit vraiment le toucher
     if (o.state === 'attack' && this.attackProgress(o) >= 0.5) {
@@ -168,21 +181,38 @@ export class Renderer {
     }
 
     if (game.phase === 'menu') {
-      c.fillStyle = 'rgba(6,3,20,0.62)';
-      c.fillRect(0, 0, LW, LH);
+      w.fillStyle = 'rgba(6,3,20,0.6)';
+      w.fillRect(0, 0, LW, LH);
     } else {
-      this.frontEffects(c, game, pose, sigColor, cue, now, input, ps.x);
+      this.frontEffects(w, game, pose, sigColor, cue, now, ps.x);
+      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertStar(w, pose, sigColor, tp);
     }
-    c.restore();
+    w.restore();
+
+    // ---- image finale : agrandissement sans lissage (gros pixels réguliers) ----
+    const c = this.c;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.imageSmoothingEnabled = false;
+    c.drawImage(this.low, 0, 0, LW * this.u, LH * this.u);
+    c.setTransform(this.u, 0, 0, this.u, 0, 0);
 
     if (game.phase === 'menu') {
       this.hud.menu(c, game, now);
     } else {
       this.hud.impactTexts(c, game);
       if (game.phase === 'fight' && game.player.counterT > 0) this.hud.counterHint(c, now);
-      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertMark(c, pose, sigColor, tp);
+      if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) {
+        const [x, y] = oppPt(pose, pose.head[0], pose.head[1] - 58);
+        pixelText(c, '!', Math.round(x), Math.round(y - 8), { size: 16, color: '#1d1024', outline: null }, 'center');
+      }
       this.hud.drawFight(c, game, dt);
-      if (game.controlMode === 'pad' && (game.phase === 'fight' || game.phase === 'intro')) this.padLabels(c, input);
+      if (game.phase === 'fight' || game.phase === 'intro') {
+        this.superButton(c, game, now);
+        if (game.controlMode === 'pad') {
+          this.padOverlay(c, input);
+          this.padLabels(c, input);
+        }
+      }
       this.hud.floatingTexts(c, game);
       this.hud.overlay(c, game, now);
     }
@@ -219,17 +249,12 @@ export class Renderer {
     c.restore();
   }
 
+  // Ombre au sol : une ellipse sombre à bord net.
   private shadow(c: Ctx, x: number, y: number, rx: number, ry: number): void {
-    const g = c.createRadialGradient(x, y, 0, x, y, rx);
-    g.addColorStop(0, 'rgba(6,4,30,0.55)');
-    g.addColorStop(1, 'rgba(6,4,30,0)');
     c.save();
-    c.translate(0, y);
-    c.scale(1, ry / rx);
-    c.translate(0, -y);
-    c.fillStyle = g;
+    c.fillStyle = 'rgba(8,5,40,0.45)';
     c.beginPath();
-    c.arc(x, y, rx, 0, Math.PI * 2);
+    c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
     c.fill();
     c.restore();
   }
@@ -240,14 +265,13 @@ export class Renderer {
     c.save();
     c.fillStyle = '#ffffff';
     for (let i = 0; i < 10; i++) {
-      const x = 16 + r() * (LW - 32);
-      const y = 120 + r() * 100;
+      const x = even(16 + r() * (LW - 32));
+      const y = even(80 + r() * 150);
       const ph = r() * 6000;
       const t = ((now + ph) % 4200) / 4200;
-      if (t < 0.035) {
-        c.globalAlpha = 1 - t / 0.035;
-        starPath(c, x, y, 5, 0.8, 4, 0);
-        c.fill();
+      if (t < 0.04) {
+        c.fillRect(x - 4, y, 10, 2);
+        c.fillRect(x, y - 4, 2, 10);
       }
     }
     c.restore();
@@ -262,7 +286,7 @@ export class Renderer {
     g.addColorStop(1, 'rgba(0,0,0,0)');
     c.save();
     c.globalCompositeOperation = 'lighter';
-    c.globalAlpha = 0.12 + 0.38 * tp;
+    c.globalAlpha = 0.1 + 0.3 * tp;
     c.fillStyle = g;
     c.beginPath();
     c.arc(CX, 250, R0, 0, Math.PI * 2);
@@ -275,12 +299,12 @@ export class Renderer {
     c.save();
     c.strokeStyle = color;
     c.lineCap = 'round';
-    for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < 28; i++) {
       const a = r() * Math.PI * 2;
       const r0 = 74 + r() * 64;
       const r1 = r0 + 64 + r() * 150;
-      c.globalAlpha = 0.25 + r() * 0.4;
-      c.lineWidth = 1 + r() * 1.6;
+      c.globalAlpha = 0.45 + r() * 0.4;
+      c.lineWidth = 2 + r() * 2;
       c.beginPath();
       c.moveTo(CX + Math.cos(a) * r0, 300 + Math.sin(a) * r0 * 1.2);
       c.lineTo(CX + Math.cos(a) * r1, 300 + Math.sin(a) * r1 * 1.2);
@@ -295,14 +319,14 @@ export class Renderer {
     starPath(c, x, y, r, r * 0.45, 5, rot);
     c.fillStyle = fill;
     c.strokeStyle = '#1d1024';
-    c.lineWidth = 1.8;
+    c.lineWidth = 2.4;
     c.lineJoin = 'round';
     c.fill();
     c.stroke();
     c.restore();
   }
 
-  private frontEffects(c: Ctx, g: Game, pose: OppPose, sigColor: string, cue: boolean, now: number, input: Input, plX: number): void {
+  private frontEffects(c: Ctx, g: Game, pose: OppPose, sigColor: string, cue: boolean, now: number, plX: number): void {
     const o = g.opponent;
 
     // anneaux autour des gants qui frappent : seulement quand il faut esquiver
@@ -310,11 +334,11 @@ export class Renderer {
       for (const idx of pose.glow) {
         const gg = idx === 0 ? pose.gl : pose.gr;
         const [cx, cy] = oppPt(pose, gg.x, gg.y);
-        const rr = gg.r * pose.sc * OPP_K + 5 + 2 * Math.sin(now / 60);
+        const rr = gg.r * pose.sc * OPP_K + 6 + 2 * Math.sin(now / 60);
         c.save();
         c.strokeStyle = sigColor;
-        c.lineWidth = 3;
-        c.setLineDash([6, 5]);
+        c.lineWidth = 4;
+        c.setLineDash([8, 6]);
         c.lineDashOffset = -now / 25;
         c.beginPath();
         c.arc(cx, cy, rr, 0, Math.PI * 2);
@@ -327,14 +351,14 @@ export class Renderer {
       const [sx, sy] = oppPt(pose, pose.head[0], pose.head[1] - 40);
       for (let i = 0; i < 4; i++) {
         const a = now / 260 + (i * Math.PI) / 2;
-        this.star5(c, sx + Math.cos(a) * 30, sy + Math.sin(a) * 8, 5 + (Math.sin(a) > 0 ? 2 : 0), a, '#ffe14d');
+        this.star5(c, sx + Math.cos(a) * 30, sy + Math.sin(a) * 8, 6 + (Math.sin(a) > 0 ? 3 : 0), a, '#ffe14d');
       }
     }
     // Nova sonné : étoiles rouges au-dessus de la tête
     if (g.player.stun > 0) {
       for (let i = 0; i < 4; i++) {
         const a = now / 200 + (i * Math.PI) / 2;
-        this.star5(c, CX + plX + Math.cos(a) * 20, 296 + Math.sin(a) * 6, 4 + (Math.sin(a) > 0 ? 2 : 0), a, '#ff5468');
+        this.star5(c, CX + plX + Math.cos(a) * 22, 290 + Math.sin(a) * 6, 5 + (Math.sin(a) > 0 ? 3 : 0), a, '#ff5468');
       }
     }
     // anneau pointillé : l'adversaire est ouvert
@@ -342,8 +366,8 @@ export class Renderer {
       const [cx, cy] = oppPt(pose, pose.head[0], pose.head[1]);
       c.save();
       c.strokeStyle = Math.floor(now / 120) % 2 ? '#ffe14d' : '#ffffff';
-      c.lineWidth = 2.6;
-      c.setLineDash([3, 5]);
+      c.lineWidth = 3.2;
+      c.setLineDash([4, 6]);
       c.lineDashOffset = -now / 40;
       c.beginPath();
       c.ellipse(cx, cy, 30, 34, 0, 0, Math.PI * 2);
@@ -357,13 +381,12 @@ export class Renderer {
       c.save();
       c.strokeStyle = '#7df9ff';
       c.lineCap = 'round';
-      c.lineWidth = 1.6;
+      c.lineWidth = 2.4;
       if (d.dir === 'back') {
         for (let i = 0; i < 12; i++) {
           if (i / 12 > alpha) continue;
           const x = CX - 100 + i * 18 + ((i * 7) % 5);
           const y = 330 + ((now / 25 + i * 17) % 50);
-          c.globalAlpha = 0.5;
           c.beginPath();
           c.moveTo(x, y);
           c.lineTo(x, y + 18 + (i % 3) * 8);
@@ -375,7 +398,6 @@ export class Renderer {
           if (i / 12 > alpha) continue;
           const y = 320 + i * 7 + ((now / 30 + i * 3) % 3);
           const x = CX + g.player.dodgeOffset * LS + dir * (34 + (i % 3) * 12);
-          c.globalAlpha = 0.5;
           c.beginPath();
           c.moveTo(x, y);
           c.lineTo(x + dir * (24 + (i % 4) * 10), y);
@@ -399,10 +421,10 @@ export class Renderer {
       c.save();
       c.strokeStyle = 'rgba(255,255,255,0.5)';
       c.lineCap = 'round';
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 30; i++) {
         const a = r() * Math.PI * 2;
         const r0 = 50 + r() * 50;
-        c.lineWidth = 1 + r() * 2;
+        c.lineWidth = 2 + r() * 3;
         c.beginPath();
         c.moveTo(CX + Math.cos(a) * r0, 240 + Math.sin(a) * r0);
         c.lineTo(CX + Math.cos(a) * 380, 240 + Math.sin(a) * 380);
@@ -410,13 +432,9 @@ export class Renderer {
       }
       c.restore();
     }
-    if (g.phase === 'fight' || g.phase === 'intro') {
-      this.superButton(c, g, now);
-      if (g.controlMode === 'pad') this.padOverlay(c, input);
-    }
   }
 
-  // Étoile d'impact « BD » : pointes irrégulières, cœur clair, contour franc.
+  // Étoile d'impact : pointes irrégulières, cœur clair, contour franc.
   private burst(c: Ctx, x: number, y: number, r: number, inner: string, outer: string, spikes: number, seed: number, rot: number): void {
     const rnd = rngf(seed);
     c.save();
@@ -433,7 +451,7 @@ export class Renderer {
     c.lineJoin = 'round';
     c.fillStyle = outer;
     c.strokeStyle = '#1d1024';
-    c.lineWidth = 2.4;
+    c.lineWidth = 3;
     c.fill();
     c.stroke();
     c.beginPath();
@@ -448,30 +466,30 @@ export class Renderer {
     if (pulse <= 0) return;
     const rot = k * 0.5;
     if (kind === 'hit') {
-      this.burst(c, x, y, 20 * pulse, '#ffffff', '#ffd23f', 9, 5, rot);
+      this.burst(c, x, y, 22 * pulse, '#ffffff', '#ffd23f', 9, 5, rot);
     } else if (kind === 'block') {
-      this.burst(c, x, y, 12 * pulse, '#ffffff', '#b9c7e6', 6, 9, rot);
+      this.burst(c, x, y, 14 * pulse, '#ffffff', '#b9c7e6', 6, 9, rot);
     } else if (kind === 'counter') {
-      this.burst(c, x, y, 30 * pulse, '#ffffff', '#52e2ff', 11, 3, rot);
+      this.burst(c, x, y, 32 * pulse, '#ffffff', '#52e2ff', 11, 3, rot);
       c.save();
       c.strokeStyle = '#7df9ff';
-      c.lineWidth = 2.4;
+      c.lineWidth = 3;
       c.globalAlpha = 1 - k;
       c.beginPath();
       c.arc(x, y, 14 + 44 * k, 0, Math.PI * 2);
       c.stroke();
       c.restore();
     } else if (kind === 'hurt') {
-      this.burst(c, x, y, 26 * pulse, '#fff2a8', '#ff3b4e', 10, 8, rot);
+      this.burst(c, x, y, 28 * pulse, '#fff2a8', '#ff3b4e', 10, 8, rot);
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2 + k;
-        this.star5(c, x + Math.cos(a) * (16 + 40 * k), y + Math.sin(a) * (16 + 40 * k), 6 * pulse, a, '#ffd23f');
+        this.star5(c, x + Math.cos(a) * (16 + 40 * k), y + Math.sin(a) * (16 + 40 * k), 7 * pulse, a, '#ffd23f');
       }
     } else {
-      this.burst(c, x, y, 52 * pulse, '#ffffff', '#ffc93c', 14, 12, rot);
+      this.burst(c, x, y, 54 * pulse, '#ffffff', '#ffc93c', 14, 12, rot);
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * Math.PI * 2;
-        this.star5(c, x + Math.cos(a) * (24 + 96 * k), y + Math.sin(a) * (24 + 96 * k), 10 * pulse, a, '#52e2ff');
+        this.star5(c, x + Math.cos(a) * (24 + 96 * k), y + Math.sin(a) * (24 + 96 * k), 11 * pulse, a, '#52e2ff');
       }
     }
   }
@@ -482,9 +500,26 @@ export class Renderer {
     g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(1, color);
     c.save();
-    c.globalAlpha = Math.max(0, Math.min(1, a));
+    c.globalAlpha = Math.max(0, Math.min(1, a * 0.7));
     c.fillStyle = g;
     c.fillRect(0, 0, LW, LH);
+    c.restore();
+  }
+
+  // Étoile d'alerte au-dessus de l'adversaire quand il charge un coup (le « ! » est écrit par-dessus, net).
+  private alertStar(c: Ctx, pose: OppPose, color: string, tp: number): void {
+    const [x, y] = oppPt(pose, pose.head[0], pose.head[1] - 58);
+    const s = 0.6 + 0.5 * Math.min(1, tp * 1.4);
+    c.save();
+    c.translate(x, y);
+    c.scale(s, s);
+    starPath(c, 0, 0, 20, 12, 8, 0);
+    c.fillStyle = color;
+    c.strokeStyle = '#1d1024';
+    c.lineWidth = 3;
+    c.lineJoin = 'round';
+    c.fill();
+    c.stroke();
     c.restore();
   }
 
@@ -495,18 +530,19 @@ export class Renderer {
     const cy = dpad.y * LS;
     const R0 = dpad.rMax * LS;
     c.save();
+    c.imageSmoothingEnabled = true;
     const base = c.createRadialGradient(cx, cy, R0 * 0.2, cx, cy, R0);
     base.addColorStop(0, 'rgba(255,255,255,0.1)');
-    base.addColorStop(1, 'rgba(180,200,255,0.2)');
+    base.addColorStop(1, 'rgba(180,200,255,0.22)');
     c.fillStyle = base;
-    c.strokeStyle = 'rgba(255,255,255,0.45)';
+    c.strokeStyle = 'rgba(255,255,255,0.5)';
     c.lineWidth = 2;
     c.beginPath();
     c.arc(cx, cy, R0, 0, Math.PI * 2);
     c.fill();
     c.stroke();
     // anneau intérieur : repère de « petite » et « grosse » esquive
-    c.strokeStyle = 'rgba(255,255,255,0.22)';
+    c.strokeStyle = 'rgba(255,255,255,0.25)';
     c.lineWidth = 1.2;
     c.setLineDash([3, 4]);
     c.beginPath();
@@ -527,8 +563,8 @@ export class Renderer {
       c.lineTo(pts[1][0], pts[1][1]);
       c.lineTo(pts[2][0], pts[2][1]);
       c.closePath();
-      c.fillStyle = on ? '#ffe14d' : dir === 'up' ? 'rgba(125,249,255,0.55)' : 'rgba(255,255,255,0.4)';
-      c.strokeStyle = 'rgba(20,10,40,0.6)';
+      c.fillStyle = on ? '#ffe14d' : dir === 'up' ? 'rgba(125,249,255,0.6)' : 'rgba(255,255,255,0.45)';
+      c.strokeStyle = 'rgba(20,10,40,0.7)';
       c.lineWidth = 1.4;
       c.lineJoin = 'round';
       c.fill();
@@ -539,10 +575,10 @@ export class Renderer {
       const by = b.y * LS;
       const br = b.r * LS;
       const g = c.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
-      g.addColorStop(0, held ? '#fff6b0' : 'rgba(255,255,255,0.32)');
-      g.addColorStop(1, held ? '#ffb000' : 'rgba(150,170,255,0.28)');
+      g.addColorStop(0, held ? '#fff6b0' : 'rgba(255,255,255,0.34)');
+      g.addColorStop(1, held ? '#ffb000' : 'rgba(150,170,255,0.3)');
       c.fillStyle = g;
-      c.strokeStyle = held ? '#ffe14d' : 'rgba(255,255,255,0.55)';
+      c.strokeStyle = held ? '#ffe14d' : 'rgba(255,255,255,0.6)';
       c.lineWidth = 2;
       c.beginPath();
       c.arc(bx, by, br, 0, Math.PI * 2);
@@ -557,8 +593,8 @@ export class Renderer {
     pixelText(c, 'G', Math.round(punchLeft.x * LS), Math.round(punchLeft.y * LS) - 8, { size: 16, color: input.btnLeft ? '#14101c' : '#ffffff' }, 'center');
     pixelText(c, 'D', Math.round(punchRight.x * LS), Math.round(punchRight.y * LS) - 8, { size: 16, color: input.btnRight ? '#14101c' : '#ffffff' }, 'center');
     const head = input.padDir === 'up';
-    pixelText(c, head ? 'VISAGE' : 'CORPS', Math.round(((punchLeft.x + punchRight.x) / 2) * LS), Math.round((punchLeft.y - punchLeft.r - 14) * LS), { size: 8, color: head ? '#7df9ff' : '#ffd23f', outline: '#1d1024' }, 'center');
-    pixelText(c, 'HAUT = VISAGE', Math.round(dpad.x * LS), Math.round((dpad.y - dpad.rMax - 12) * LS), { size: 8, color: '#7df9ff', outline: '#1d1024' }, 'center');
+    pixelText(c, head ? 'VISAGE' : 'CORPS', Math.round(((punchLeft.x + punchRight.x) / 2) * LS), Math.round((punchLeft.y - punchLeft.r - 14) * LS), { size: 8, color: head ? '#7df9ff' : '#ffd23f' }, 'center');
+    pixelText(c, 'HAUT = VISAGE', Math.round(dpad.x * LS), Math.round((dpad.y - dpad.rMax - 12) * LS), { size: 8, color: '#7df9ff' }, 'center');
   }
 
   // Bouton du super uppercut : anneau qui se remplit avec la jauge, clignote quand il est prêt.
@@ -571,25 +607,24 @@ export class Renderer {
     const ready = g.player.meterFull && !g.player.superAnim;
     const blink = Math.floor(now / 140) % 2 === 0;
     c.save();
+    c.imageSmoothingEnabled = true;
     const bg = c.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r);
-    bg.addColorStop(0, ready ? (blink ? '#fff6b0' : '#ffc93c') : 'rgba(255,255,255,0.18)');
-    bg.addColorStop(1, ready ? '#ff8a00' : 'rgba(80,90,160,0.3)');
+    bg.addColorStop(0, ready ? (blink ? '#fff6b0' : '#ffc93c') : 'rgba(255,255,255,0.2)');
+    bg.addColorStop(1, ready ? '#ff8a00' : 'rgba(80,90,160,0.34)');
     c.fillStyle = bg;
     c.beginPath();
     c.arc(cx, cy, r, 0, Math.PI * 2);
     c.fill();
-    c.strokeStyle = 'rgba(255,255,255,0.5)';
+    c.strokeStyle = 'rgba(255,255,255,0.55)';
     c.lineWidth = 2;
     c.stroke();
-    // arc de jauge
     c.lineCap = 'round';
     c.lineWidth = 4.5;
     c.strokeStyle = ready ? (blink ? '#ffffff' : '#ffe14d') : '#ffc93c';
     c.beginPath();
     c.arc(cx, cy, r - 3, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
     c.stroke();
-    // icône : flèche qui monte
-    c.fillStyle = ready ? '#3a1a00' : 'rgba(255,255,255,0.6)';
+    c.fillStyle = ready ? '#3a1a00' : 'rgba(255,255,255,0.65)';
     c.beginPath();
     c.moveTo(cx, cy - 14);
     c.lineTo(cx + 12, cy);
@@ -601,23 +636,5 @@ export class Renderer {
     c.closePath();
     c.fill();
     c.restore();
-  }
-
-  // « ! » dans une étoile au-dessus de l'adversaire quand il charge un coup.
-  private alertMark(c: Ctx, pose: OppPose, color: string, tp: number): void {
-    const [x, y] = oppPt(pose, pose.head[0], pose.head[1] - 58);
-    const s = 0.6 + 0.5 * Math.min(1, tp * 1.4);
-    c.save();
-    c.translate(x, y);
-    c.scale(s, s);
-    starPath(c, 0, 0, 20, 12, 8, 0);
-    c.fillStyle = color;
-    c.strokeStyle = '#1d1024';
-    c.lineWidth = 2.6;
-    c.lineJoin = 'round';
-    c.fill();
-    c.stroke();
-    c.restore();
-    pixelText(c, '!', x, y - 9 * s, { size: 16 * s + 2, color: '#1d1024', outline: null }, 'center');
   }
 }

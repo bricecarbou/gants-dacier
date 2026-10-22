@@ -1,10 +1,11 @@
 import { CONFIG } from '../config';
 import { RESULT_BUTTON, type Game, type Outcome } from '../game/state';
 import { pixelText } from './font';
-import { type Ctx, mix } from './vec';
 import { LH, LS, LW } from './view';
 
-const INK = '#1d1024';
+type Ctx = CanvasRenderingContext2D;
+
+const INK = '#14101c';
 const MID = LW / 2;
 const OUTCOME_TEXT: Record<Outcome, [string, string]> = {
   'ko-win': ['VICTOIRE', 'PAR K.O. !'],
@@ -18,77 +19,34 @@ const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const easeOut = (k: number) => 1 - Math.pow(1 - clamp01(k), 3);
 
-function rrect(c: Ctx, x: number, y: number, w: number, h: number, r: number): void {
-  c.beginPath();
-  c.roundRect(x, y, w, h, r);
-}
-
-// Panneau arrondi à reflet : fond sombre, liseré clair.
-function panel(c: Ctx, x: number, y: number, w: number, h: number, fill: string, edge = '#ffffff', r = 6): void {
-  c.save();
-  const g = c.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, mix(fill, '#ffffff', 0.16));
-  g.addColorStop(1, fill);
-  c.fillStyle = g;
-  c.strokeStyle = mix(edge, fill, 0.55);
-  c.lineWidth = 2;
-  rrect(c, x, y, w, h, r);
-  c.fill();
-  c.stroke();
-  c.restore();
-}
-
-// Bouton « bonbon » : dégradé, reflet, contour sombre.
-function button(c: Ctx, x: number, y: number, w: number, h: number, top: string, bottom: string): void {
-  c.save();
-  const g = c.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, top);
-  g.addColorStop(1, bottom);
-  c.fillStyle = g;
-  c.strokeStyle = INK;
-  c.lineWidth = 2.4;
-  rrect(c, x, y, w, h, h * 0.32);
-  c.fill();
-  c.stroke();
-  c.fillStyle = 'rgba(255,255,255,0.3)';
-  rrect(c, x + 3, y + 3, w - 6, h * 0.38, h * 0.2);
-  c.fill();
-  c.restore();
+function box(c: Ctx, x: number, y: number, w: number, h: number, fill: string, edge = INK): void {
+  c.fillStyle = edge;
+  c.fillRect(x - 2, y - 2, w + 4, h + 4);
+  c.fillStyle = fill;
+  c.fillRect(x, y, w, h);
 }
 
 export class Hud {
   private oppTrail = 1;
   private plTrail = 1;
 
-  // Barre de vie arrondie ; la traînée blanche rattrape les dégâts.
+  // Barre de vie segmentée ; la traînée blanche rattrape les dégâts.
   private bar(c: Ctx, x: number, y: number, w: number, h: number, ratio: number, trail: number, flash: boolean): void {
-    c.save();
-    c.fillStyle = '#150d2a';
-    c.strokeStyle = '#f4f0e6';
-    c.lineWidth = 1.6;
-    rrect(c, x, y, w, h, h / 2);
-    c.fill();
-    c.stroke();
-    c.save();
-    rrect(c, x + 1, y + 1, w - 2, h - 2, h / 2);
-    c.clip();
+    box(c, x, y, w, h, '#2a2040');
     c.fillStyle = '#f4f0e6';
-    c.fillRect(x, y, w * clamp01(trail), h);
-    const mw = w * clamp01(ratio);
-    const [hi, mid, lo] = ratio > 0.5 ? ['#c8ff5a', '#3ddc84', '#16995a'] : ratio > 0.25 ? ['#fff08a', '#ffc21a', '#c98a00'] : ['#ff9a8a', '#e63946', '#9a1428'];
-    const g = c.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, flash ? '#ffffff' : hi);
-    g.addColorStop(0.5, flash ? '#ffffff' : mid);
-    g.addColorStop(1, flash ? '#ffffff' : lo);
-    c.fillStyle = g;
+    c.fillRect(x, y, Math.round(w * clamp01(trail)), h);
+    const mw = Math.round(w * clamp01(ratio));
+    const [hi, mid, lo] = ratio > 0.5 ? ['#b6f23a', '#3ddc84', '#1f9a58'] : ratio > 0.25 ? ['#fff08a', '#ffc21a', '#c98a00'] : ['#ff9a8a', '#e63946', '#9a1428'];
+    c.fillStyle = flash ? '#ffffff' : mid;
     c.fillRect(x, y, mw, h);
-    c.fillStyle = 'rgba(255,255,255,0.35)';
-    c.fillRect(x, y + 1, mw, h * 0.28);
-    c.restore();
-    // graduations discrètes
-    c.fillStyle = 'rgba(20,10,40,0.35)';
-    for (let i = 1; i < 10; i++) c.fillRect(x + (w * i) / 10 - 0.5, y + 2, 1, h - 4);
-    c.restore();
+    if (!flash) {
+      c.fillStyle = hi;
+      c.fillRect(x, y, mw, 2);
+      c.fillStyle = lo;
+      c.fillRect(x, y + h - 2, mw, 2);
+    }
+    c.fillStyle = INK;
+    for (let i = 1; i < 10; i++) c.fillRect(x + Math.round((w * i) / 10), y, 2, h);
   }
 
   drawFight(c: Ctx, g: Game, dt: number): void {
@@ -96,45 +54,29 @@ export class Hud {
     this.oppTrail = g.opponent.hpRatio >= this.oppTrail ? g.opponent.hpRatio : lerp(this.oppTrail, g.opponent.hpRatio, follow * 0.6);
     this.plTrail = g.player.hpRatio >= this.plTrail ? g.player.hpRatio : lerp(this.plTrail, g.player.hpRatio, follow * 0.6);
 
-    // bandeau en haut : nom + barre de vie à gauche, round et chrono à droite
-    c.save();
-    const top = c.createLinearGradient(0, 0, 0, 40);
-    top.addColorStop(0, 'rgba(10,5,32,0.92)');
-    top.addColorStop(1, 'rgba(10,5,32,0.55)');
-    c.fillStyle = top;
-    c.fillRect(0, 0, LW, 40);
-    c.fillStyle = '#ffc93c';
-    c.fillRect(0, 40, LW, 2);
-    c.restore();
-    pixelText(c, 'BRAZE', 9, 4, { size: 8, color: '#ffd23f', outline: INK });
-    this.bar(c, 9, 20, 160, 11, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
+    // bandeau compact en haut : nom + barre de vie à gauche, round et chrono à droite
+    c.fillStyle = '#0c1030';
+    c.fillRect(0, 0, 288, 34);
+    c.fillStyle = '#ffd23f';
+    c.fillRect(0, 34, 288, 2);
+    pixelText(c, 'BRAZE', 8, 5, { size: 8, color: '#ffd23f', outline: null });
+    this.bar(c, 8, 18, 160, 9, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
     const secs = Math.max(0, Math.ceil(g.roundTimer / 1000));
     const shown = g.phase === 'break' ? g.round - 1 : g.round;
-    pixelText(c, `ROUND ${shown}`, 279, 4, { size: 8, color: '#ffd23f', outline: INK }, 'right');
-    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 279, 15, { size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff' }, 'right');
+    pixelText(c, `ROUND ${shown}`, 280, 5, { size: 8, color: '#ffd23f', outline: null }, 'right');
+    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 280, 16,{ size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff', outline: null }, 'right');
 
-    pixelText(c, 'NOVA', 10, 462, { size: 16, color: '#7df9ff' });
-    this.bar(c, 10, 488, 108, 12, g.player.hpRatio, this.plTrail, g.player.hitFlash > 120);
-    pixelText(c, 'ENDURANCE', 278, 472, { size: 8, color: '#ffd23f', outline: INK }, 'right');
+    pixelText(c, 'NOVA', 10, 466, { size: 16, color: '#7df9ff' });
+    this.bar(c, 10, 490, 108, 11, g.player.hpRatio, this.plTrail, g.player.hitFlash > 120);
+    pixelText(c, 'ENDURANCE', 278, 472, { size: 8, color: '#ffd23f', outline: null }, 'right');
     const pips = Math.floor(CONFIG.player.maxStamina / CONFIG.player.punchCost);
     const pw = Math.floor((108 - (pips - 1) * 2) / pips);
     for (let i = 0; i < pips; i++) {
       const fill = clamp01(g.player.stamina / CONFIG.player.punchCost - i);
       const px = 170 + i * (pw + 2);
-      c.save();
-      c.fillStyle = '#150d2a';
-      c.strokeStyle = 'rgba(255,255,255,0.6)';
-      c.lineWidth = 1.2;
-      rrect(c, px, 488, pw, 12, 3);
-      c.fill();
-      c.stroke();
-      c.clip();
-      const gg = c.createLinearGradient(0, 488, 0, 500);
-      gg.addColorStop(0, fill >= 1 ? '#ffe98a' : '#ffb870');
-      gg.addColorStop(1, fill >= 1 ? '#f2a30c' : '#e0661c');
-      c.fillStyle = gg;
-      c.fillRect(px, 488 + 12 - 12 * fill, pw, 12 * fill);
-      c.restore();
+      box(c, px, 490, pw, 11, '#2a2040');
+      c.fillStyle = fill >= 1 ? '#ffd23f' : '#ff8a3d';
+      c.fillRect(px, 490 + 11 - Math.round(11 * fill), pw, Math.round(11 * fill));
     }
   }
 
@@ -144,14 +86,9 @@ export class Hud {
       const big = f.text === 'FIGHT !';
       c.save();
       c.globalAlpha = big ? 1 : k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
-      const y = f.y * LS - k * (big ? 6 : 28);
-      if (big) {
-        const s = 1 + 0.25 * Math.max(0, 1 - k * 4);
-        c.translate(MID, y);
-        c.scale(s, s);
-        c.rotate(-0.06);
-        pixelText(c, 'FIGHT!', 0, -26, { size: 48, color: '#ffe14d', shadow: '#7a1020', italic: true }, 'center');
-      } else pixelText(c, f.text, f.x * LS, y, { size: f.text.startsWith('-') ? 10 : 16, color: f.color, shadow: '#000000' }, 'center');
+      const y = Math.round(f.y * LS - k * (big ? 6 : 28));
+      if (big) pixelText(c, 'FIGHT!', MID, y - 24, { size: 48, color: '#ffe14d', shadow: '#7a1020' }, 'center');
+      else pixelText(c, f.text, Math.round(f.x * LS), y, { size: f.text.startsWith('-') ? 8 : 16, color: f.color, shadow: '#000000' }, 'center');
       c.restore();
     }
   }
@@ -160,21 +97,17 @@ export class Hud {
     for (const im of g.impacts) {
       if (im.kind === 'hit' || im.kind === 'block') continue;
       const k = im.t / 360;
-      const size = im.kind === 'super' ? 32 : 18;
+      const size = im.kind === 'super' ? 32 : 16;
       c.save();
       c.globalAlpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
       const col = im.kind === 'counter' || im.kind === 'super' ? '#7df9ff' : '#ffffff';
-      c.translate(im.x * LS, im.y * LS - size / 2 + (k < 0.15 ? 3 : 0));
-      const s = 1 + 0.3 * Math.max(0, 1 - k * 5);
-      c.scale(s, s);
-      c.rotate(-0.08);
-      pixelText(c, im.text.replace(' !', '!'), 0, 0, { size, color: col, outline: INK, shadow: '#000000', italic: true }, 'center');
+      pixelText(c, im.text.replace(' !', '!'), Math.round(im.x * LS), Math.round(im.y * LS) - size / 2 + (k < 0.15 ? 3 : 0), { size, color: col, outline: INK, shadow: '#000000' }, 'center');
       c.restore();
     }
   }
 
   counterHint(c: Ctx, now: number): void {
-    if (Math.floor(now / 110) % 2) pixelText(c, 'CONTRE!', MID, 380, { size: 16, color: '#7df9ff', italic: true }, 'center');
+    if (Math.floor(now / 110) % 2) pixelText(c, 'CONTRE!', MID, 380, { size: 16, color: '#7df9ff' }, 'center');
   }
 
   overlay(c: Ctx, g: Game, now: number): void {
@@ -182,28 +115,22 @@ export class Hud {
       case 'intro': {
         const p = 1 - g.phaseTimer / CONFIG.fight.introMs;
         const k = p < 0.2 ? easeOut(p / 0.2) : p > 0.85 ? 1 - easeOut((p - 0.85) / 0.15) : 1;
-        const off = lerp(-LW, 0, k);
-        c.save();
-        c.translate(off, 0);
-        const gr = c.createLinearGradient(0, 232, 0, 316);
-        gr.addColorStop(0, '#2b1260');
-        gr.addColorStop(1, '#120830');
-        c.fillStyle = gr;
-        c.fillRect(0, 236, LW, 76);
-        c.fillStyle = '#ffc93c';
-        c.fillRect(0, 234, LW, 4);
-        c.fillRect(0, 310, LW, 4);
+        const off = Math.round(lerp(-LW, 0, k));
+        c.fillStyle = INK;
+        c.fillRect(off, 236, LW, 76);
+        c.fillStyle = '#ffd23f';
+        c.fillRect(off, 236, LW, 3);
+        c.fillRect(off, 309, LW, 3);
         c.fillStyle = '#e63946';
-        c.fillRect(0, 238, LW, 2);
-        c.fillRect(0, 308, LW, 2);
-        pixelText(c, `ROUND ${g.round}`, MID, 247, { size: 32, color: '#ffffff', outline: INK, shadow: '#7a1020', italic: true }, 'center');
-        pixelText(c, g.round === CONFIG.fight.rounds ? 'DERNIER ROUND' : `SUR ${CONFIG.fight.rounds}`, MID, 289, { size: 16, color: '#ffd23f' }, 'center');
-        c.restore();
+        c.fillRect(off, 239, LW, 2);
+        c.fillRect(off, 307, LW, 2);
+        pixelText(c, `ROUND ${g.round}`, off + MID, 252, { size: 32, color: '#ffffff', outline: INK, shadow: '#7a1020' }, 'center');
+        pixelText(c, g.round === CONFIG.fight.rounds ? 'DERNIER ROUND' : `SUR ${CONFIG.fight.rounds}`, off + MID, 290, { size: 16, color: '#ffd23f', outline: null }, 'center');
         break;
       }
       case 'koPause': {
         const blink = Math.floor(now / 90) % 2;
-        pixelText(c, 'K.O.!', MID, 210, { size: 56, color: blink ? '#ffe14d' : '#ff3b4e', outline: INK, shadow: '#000000', italic: true }, 'center');
+        pixelText(c, 'K.O.!', MID, 220, { size: 48, color: blink ? '#ffe14d' : '#ff3b4e', outline: INK, shadow: '#000000' }, 'center');
         break;
       }
       case 'break': {
@@ -214,7 +141,7 @@ export class Hud {
         rows.forEach(([name, ratio, col], i) => {
           const y = 240 + i * 40;
           pixelText(c, name, 10, y - 2, { size: 16, color: col }, 'left');
-          this.bar(c, 106, y, 172, 12, ratio, ratio, false);
+          this.bar(c, 106, y, 172, 11, ratio, ratio, false);
         });
         pixelText(c, 'RESPIRE...', MID, 345, { size: 16, color: '#9aa0b5' }, 'center');
         break;
@@ -245,61 +172,53 @@ export class Hud {
     }
     c.restore();
     const [title, sub] = OUTCOME_TEXT[g.outcome!];
-    const bob = Math.sin(now / 200) * 3;
-    pixelText(c, title, MID, 160 + bob, { size: 36, color: win ? '#ffe14d' : draw ? '#ffffff' : '#ff5468', outline: INK, shadow: '#000000', italic: true }, 'center');
-    pixelText(c, sub, MID, 214, { size: 16, color: '#ffffff' }, 'center');
-    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 266, { size: 16, color: '#b9b3d0' }, 'center');
+    const bob = Math.round(Math.sin(now / 200) * 3);
+    pixelText(c, title, MID, 168 + bob, { size: 32, color: win ? '#ffe14d' : draw ? '#ffffff' : '#ff5468', outline: INK, shadow: '#000000' }, 'center');
+    pixelText(c, sub, MID, 218, { size: 16, color: '#ffffff' }, 'center');
+    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 270, { size: 16, color: '#b9b3d0' }, 'center');
 
     const b = RESULT_BUTTON;
-    const bx = b.x * LS;
-    const by = b.y * LS + (Math.floor(now / 400) % 2) * 2;
-    const bw = b.w * LS;
-    const bh = b.h * LS;
-    button(c, bx, by, bw, bh, '#ffd45a', '#ff8f1c');
-    pixelText(c, 'REJOUER', bx + bw / 2, by + bh / 2 - 8, { size: 16, color: INK, outline: null }, 'center');
+    const bx = Math.round(b.x * LS);
+    const by = Math.round(b.y * LS) + (Math.floor(now / 400) % 2) * 2;
+    const bw = Math.round(b.w * LS);
+    const bh = Math.round(b.h * LS);
+    box(c, bx, by, bw, bh, '#ff9f1c');
+    c.fillStyle = '#ffe56b';
+    c.fillRect(bx, by, bw, 3);
+    c.fillStyle = '#c96a00';
+    c.fillRect(bx, by + bh - 3, bw, 3);
+    pixelText(c, 'REJOUER', bx + bw / 2, by + 12, { size: 16, color: INK, outline: null }, 'center');
   }
 
   menu(c: Ctx, g: Game, now: number): void {
-    // rayons derrière le titre
-    c.save();
-    c.translate(MID, 110);
-    c.rotate(now / 9000);
-    for (let i = 0; i < 14; i++) {
-      c.rotate((Math.PI * 2) / 14);
-      c.fillStyle = 'rgba(255,214,90,0.06)';
-      c.beginPath();
-      c.moveTo(0, 0);
-      c.lineTo(300, -18);
-      c.lineTo(300, 18);
-      c.closePath();
-      c.fill();
-    }
-    c.restore();
-    pixelText(c, 'GANTS', MID, 52, { size: 60, color: '#ffd23f', outline: INK, shadow: '#7a1020', italic: true }, 'center');
-    pixelText(c, "D'ACIER", MID, 122, { size: 42, color: '#e6eeff', outline: INK, shadow: '#243a7a', italic: true }, 'center');
-    pixelText(c, 'COMBAT À PATTERNS', MID, 180, { size: 15, color: '#c9d1e6' }, 'center');
+    pixelText(c, 'GANTS', MID, 62, { size: 56, color: '#ffd23f', outline: INK, shadow: '#7a1020' }, 'center');
+    pixelText(c, "D'ACIER", MID, 128, { size: 40, color: '#d4def5', outline: INK, shadow: '#243a7a' }, 'center');
+    pixelText(c, 'COMBAT À PATTERNS', MID, 182, { size: 16, color: '#c9d1e6' }, 'center');
 
     const pad = g.controlMode === 'pad';
-    panel(c, 20, 312, 248, 86, '#1a1038');
-    const lines = pad ? ['G/D: ESQUIVE', 'BAS: PARER', 'POING: CORPS', 'HAUT+POING: TÊTE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: PARER', 'TAP: FRAPPER'];
+    box(c, 20, 312, 248, 86, '#140e28');
+    const lines = pad ? ['G/D: ESQUIVE', 'BAS: PARER', 'POING: CORPS', 'HAUT+POING: TETE'] : ['SWIPE G/D: ESQUIVE', 'SWIPE BAS: PARER', 'TAP: FRAPPER'];
     const cols = pad ? ['#7df9ff', '#7df9ff', '#ffd23f', '#ffd23f'] : ['#7df9ff', '#7df9ff', '#ffd23f'];
-    lines.forEach((t, i) => pixelText(c, t, MID, 319 + i * 19, { size: 14, color: cols[i], outline: null }, 'center'));
+    lines.forEach((t, i) => pixelText(c, t, MID, 319 + i * 19, { size: 16, color: cols[i], outline: null }, 'center'));
     // choix du mode de commandes : deux onglets
     const mb = CONFIG.input.modeButton;
-    const bx = mb.x * LS;
-    const by = mb.y * LS;
-    const bw = mb.w * LS;
-    const bh = mb.h * LS;
-    pixelText(c, 'COMMANDES', MID, by - 14, { size: 8, color: '#a49fc4', outline: null }, 'center');
+    const bx = Math.round(mb.x * LS);
+    const by = Math.round(mb.y * LS);
+    const bw = Math.round(mb.w * LS);
+    const bh = Math.round(mb.h * LS);
+    pixelText(c, 'COMMANDES', MID, by - 14, { size: 8, color: '#8d88a8', outline: null }, 'center');
     ([['SWIPE', false], ['CROIX', true]] as const).forEach(([label, isPad], i) => {
       const on = pad === isPad;
       const w = Math.floor(bw / 2) - 2;
       const x = bx + i * (w + 4);
-      if (on) button(c, x, by, w, bh, '#9a82ff', '#5a3cd8');
-      else panel(c, x, by, w, bh, '#241a44', '#8d88a8', bh * 0.3);
-      pixelText(c, label, x + w / 2, by + bh / 2 - 7, { size: 14, color: on ? '#ffffff' : '#7e789f', outline: on ? INK : null }, 'center');
+      box(c, x, by, w, bh, on ? '#7a5cff' : '#1d1530');
+      if (on) {
+        c.fillStyle = '#b9a8ff';
+        c.fillRect(x, by, w, 3);
+      }
+      pixelText(c, label, x + w / 2, by + 9, { size: 16, color: on ? '#ffffff' : '#6d6890', outline: null }, 'center');
     });
-    if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 466, { size: 16, color: '#ffffff', italic: true }, 'center');
-    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 494, { size: 14, color: '#a49fc4', outline: null }, 'center');
+    if (Math.floor(now / 500) % 2) pixelText(c, 'TOUCHE POUR JOUER', MID, 470, { size: 16, color: '#ffffff' }, 'center');
+    pixelText(c, `V${g.record.wins} N${g.record.draws} D${g.record.losses}`, MID, 496, { size: 16, color: '#8d88a8', outline: null }, 'center');
   }
 }

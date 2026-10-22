@@ -146,7 +146,7 @@ export function stroke(c: Ctx, pts: Pt[], color: string, lw: number, alpha = 1):
   c.save();
   c.globalAlpha = alpha;
   c.strokeStyle = color;
-  c.lineWidth = lw;
+  c.lineWidth = Math.max(2, lw); // au moins un pixel de l'image finale
   c.lineCap = 'round';
   c.lineJoin = 'round';
   c.beginPath();

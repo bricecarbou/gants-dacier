@@ -10,7 +10,7 @@ import { type Ctx, LINE, capsulePath, dot, ellPath, mix, polyPath, smoothPath, s
 
 const CX = 144;
 export const PL_FEET = 424; // ligne des pieds à l'écran
-export const PL_JUMP_HEAD = 50; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher son visage)
+export const PL_JUMP_HEAD = 30; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher son visage)
 const HIP_H = 56; // hauteur du bassin au-dessus des pieds
 const N1 = 30; // segments du bras (constants)
 const N2 = 36;

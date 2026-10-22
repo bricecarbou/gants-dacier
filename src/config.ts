@@ -16,6 +16,7 @@ export const CONFIG = {
       punchRight: { x: 320, y: 530, r: 30 },
     },
     modeButton: { x: 30, y: 520, w: 300, h: 40 }, // bascule du mode de commandes (écran titre)
+    musicButton: { x: 296, y: 8, w: 54, h: 44 }, // musique activée / coupée (écran titre)
   },
   player: {
     maxHp: 100,

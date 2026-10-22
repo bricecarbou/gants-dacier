@@ -146,7 +146,8 @@ export class Hud {
   }
 
   counterHint(c: Ctx, now: number): void {
-    if (Math.floor(now / 110) % 2) pixelText(c, 'CONTRE!', MID, 380, { size: 16, color: '#7df9ff' }, 'center');
+    void now;
+    pixelText(c, 'CONTRE!', MID, 372, { size: 16, color: '#7df9ff' }, 'center'); // fixe : pas de clignotement qui distrait
   }
 
   overlay(c: Ctx, g: Game, now: number): void {
@@ -230,6 +231,17 @@ export class Hud {
   }
 
   menu(c: Ctx, g: Game, now: number): void {
+    // bouton de musique (en haut à droite) : note, barrée quand la musique est coupée
+    const mu = CONFIG.input.musicButton;
+    const mx = Math.round(mu.x * LS);
+    const my = Math.round(mu.y * LS);
+    this.cell(c, mx, my, 40, 34);
+    const NOTE = ['..1111.', '..1..1.', '..1..1.', '..1..1.', '11.11..', '11.11..', '.......'];
+    this.icon(c, NOTE, mx + 12, my + 9, g.musicOn ? '#ffd23f' : '#6d6890');
+    if (!g.musicOn) {
+      c.fillStyle = '#ff5468';
+      for (let i = 0; i < 22; i += 2) c.fillRect(mx + 8 + i, my + 24 - i, 3, 3);
+    }
     pixelText(c, 'GANTS', MID, 62, { size: 56, color: '#ffd23f', outline: INK, shadow: '#7a1020' }, 'center');
     pixelText(c, "D'ACIER", MID, 128, { size: 40, color: '#d4def5', outline: INK, shadow: '#243a7a' }, 'center');
     pixelText(c, 'COMBAT À PATTERNS', MID, 182, { size: 16, color: '#c9d1e6' }, 'center');

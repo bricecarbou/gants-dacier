@@ -1,10 +1,41 @@
 import { CONFIG } from '../config';
+import { Music } from './music';
 
 export type Sfx = 'telegraph' | 'punch' | 'hit' | 'block' | 'dodge' | 'hurt' | 'bell' | 'ko' | 'empty' | 'super';
 
 // Sons placeholders générés à la volée (Web Audio), aucun fichier tiers.
 export class Audio {
   private ctx: AudioContext | null = null;
+  musicOn = (() => {
+    try {
+      return localStorage.getItem('boxe-music') !== 'off';
+    } catch {
+      return true;
+    }
+  })();
+  private music = new Music(
+    () => this.ctx,
+    () => CONFIG.audio.volume * 0.5,
+  );
+
+  toggleMusic(): void {
+    this.musicOn = !this.musicOn;
+    try {
+      localStorage.setItem('boxe-music', this.musicOn ? 'on' : 'off');
+    } catch {
+      /* stockage indisponible */
+    }
+    if (!this.musicOn) this.music.setMode('none');
+  }
+
+  // Appelé à chaque image : la musique suit la phase du jeu (menu, combat, silence).
+  setMusic(mode: 'none' | 'menu' | 'fight', intensity = 0): void {
+    this.music.setMode(this.musicOn ? mode : 'none', intensity);
+  }
+
+  jingle(win: boolean): void {
+    if (this.musicOn) this.music.jingle(win);
+  }
 
   // À appeler depuis un geste utilisateur (politique d'autoplay des navigateurs).
   unlock(): void {

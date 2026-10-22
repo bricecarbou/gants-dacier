@@ -98,12 +98,23 @@ export class Game {
     this.impacts.push({ kind, x, y, t: 0, text });
   }
 
+  get musicOn(): boolean {
+    return this.audio.musicOn;
+  }
+
   get controlMode(): 'swipe' | 'pad' {
     return this.input.mode;
   }
 
   update(dt: number, actions: Action[]): void {
     this.input.inMenu = this.phase === 'menu';
+    if (actions.includes('musicToggle')) {
+      this.audio.toggleMusic();
+      actions = actions.filter((a) => a !== 'musicToggle');
+    }
+    // la musique suit le jeu : thème calme au menu et entre les rounds, thème nerveux en combat (qui accélère aux rounds suivants)
+    const music = this.phase === 'menu' || this.phase === 'break' ? 'menu' : this.phase === 'fight' ? 'fight' : 'none';
+    this.audio.setMusic(music, Math.min(1, (this.round - 1) * 0.35 + (this.player.hpRatio < 0.3 ? 0.4 : 0)));
     for (const f of this.fx) f.t += dt;
     this.fx = this.fx.filter((f) => f.t < FX_MS);
     for (const i of this.impacts) i.t += dt;
@@ -391,5 +402,6 @@ export class Game {
     saveRecord(this.record);
     this.phase = 'result';
     this.resultAge = 0;
+    this.audio.jingle(this.outcome === 'ko-win' || this.outcome === 'points-win');
   }
 }

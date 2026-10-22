@@ -8,7 +8,7 @@ import { drawOpponent } from './oppDraw';
 import { type OppPose, computePose } from './oppPose';
 import { PL_FEET, drawPlayer, playerState } from './plDraw';
 import { LH, LS, LW } from './view';
-import { type Ctx, mix, starPath } from './vec';
+import { type Ctx, starPath } from './vec';
 
 const CX = LW / 2;
 const OPP_K = 0.86; // l'adversaire est tracé à 86 % de sa taille (environ 45 % de la hauteur de l'écran)
@@ -140,7 +140,6 @@ export class Renderer {
 
     // calque arrière : aura de télégraphie, lignes de vitesse du super
     if (game.phase !== 'menu') {
-      if (o.state === 'telegraph') this.aura(w, tp, sigColor, now);
       if (game.player.superAnim) this.speed(w, Math.floor(now / 45) + 99, '#7df9ff');
     }
 
@@ -188,7 +187,7 @@ export class Renderer {
       w.fillStyle = 'rgba(6,3,20,0.6)';
       w.fillRect(0, 0, LW, LH);
     } else {
-      this.frontEffects(w, game, pose, sigColor, cue, now, ps.x);
+      this.frontEffects(w, game, pose, now, ps.x);
       if (o.state === 'telegraph' && o.pattern && this.toImpact(o) > CONFIG.opponent.cueMs) this.alertStar(w, pose, sigColor, tp);
     }
     w.restore();
@@ -281,23 +280,6 @@ export class Renderer {
     c.restore();
   }
 
-  // Halo derrière l'adversaire, couleur du signal.
-  private aura(c: Ctx, tp: number, color: string, now: number): void {
-    const pulse = 0.55 + 0.45 * Math.abs(Math.sin(now / (130 - 80 * tp)));
-    const R0 = 70 + 70 * tp * pulse;
-    const g = c.createRadialGradient(CX, 250, 8, CX, 250, R0);
-    g.addColorStop(0, mix(color, '#ffffff', 0.35));
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    c.save();
-    c.globalCompositeOperation = 'lighter';
-    c.globalAlpha = 0.1 + 0.3 * tp;
-    c.fillStyle = g;
-    c.beginPath();
-    c.arc(CX, 250, R0, 0, Math.PI * 2);
-    c.fill();
-    c.restore();
-  }
-
   private speed(c: Ctx, seed: number, color: string): void {
     const r = rngf(seed * 977 + 13);
     c.save();
@@ -330,26 +312,9 @@ export class Renderer {
     c.restore();
   }
 
-  private frontEffects(c: Ctx, g: Game, pose: OppPose, sigColor: string, cue: boolean, now: number, plX: number): void {
+  private frontEffects(c: Ctx, g: Game, pose: OppPose, now: number, plX: number): void {
     const o = g.opponent;
 
-    // anneaux autour des gants qui frappent : seulement quand il faut esquiver
-    if ((o.state === 'telegraph' || o.state === 'attack') && cue) {
-      for (const idx of pose.glow) {
-        const gg = idx === 0 ? pose.gl : pose.gr;
-        const [cx, cy] = oppPt(pose, gg.x, gg.y);
-        const rr = gg.r * pose.sc * OPP_K + 6 + 2 * Math.sin(now / 60);
-        c.save();
-        c.strokeStyle = sigColor;
-        c.lineWidth = 4;
-        c.setLineDash([8, 6]);
-        c.lineDashOffset = -now / 25;
-        c.beginPath();
-        c.arc(cx, cy, rr, 0, Math.PI * 2);
-        c.stroke();
-        c.restore();
-      }
-    }
     // étoiles qui tournent au-dessus de la tête quand il est sonné ou K.O.
     if (o.state === 'hit' || o.state === 'ko') {
       const [sx, sy] = oppPt(pose, pose.head[0], pose.head[1] - 40);
@@ -378,45 +343,9 @@ export class Renderer {
       c.stroke();
       c.restore();
     }
-    // traînées d'esquive : latérale (horizontales) ou parade (verticales)
-    const d = g.player.dodge;
-    if (d) {
-      const alpha = 1 - d.t / d.ms;
-      c.save();
-      c.strokeStyle = '#7df9ff';
-      c.lineCap = 'round';
-      c.lineWidth = 2.4;
-      if (d.dir === 'back') {
-        for (let i = 0; i < 12; i++) {
-          if (i / 12 > alpha) continue;
-          const x = CX - 100 + i * 18 + ((i * 7) % 5);
-          const y = 330 + ((now / 25 + i * 17) % 50);
-          c.beginPath();
-          c.moveTo(x, y);
-          c.lineTo(x, y + 18 + (i % 3) * 8);
-          c.stroke();
-        }
-      } else {
-        const dir = d.dir === 'left' ? 1 : -1;
-        for (let i = 0; i < 12; i++) {
-          if (i / 12 > alpha) continue;
-          const y = 320 + i * 7 + ((now / 30 + i * 3) % 3);
-          const x = CX + g.player.dodgeOffset * LS + dir * (34 + (i % 3) * 12);
-          c.beginPath();
-          c.moveTo(x, y);
-          c.lineTo(x + dir * (24 + (i % 4) * 10), y);
-          c.stroke();
-        }
-      }
-      c.restore();
-    }
     // impacts
     for (const im of g.impacts) this.impactFx(c, im.kind, im.x * LS, im.y * LS, im.t / 360);
-    // cadre cyan : fenêtre de contre
-    if (g.phase === 'fight' && g.player.counterT > 0) {
-      const a = (0.5 + 0.3 * Math.sin(now / 70)) * Math.min(1, (g.player.counterT / CONFIG.player.counterWindowMs) * 3);
-      this.edgeGlow(c, '#7df9ff', a * 0.7);
-    }
+    // (plus de cadre ni de halo : seuls le « ! » du début et le clignotement final guident le contre)
     // bord rouge pulsé : vie basse
     if (g.player.hpRatio < 0.3 && g.player.hp > 0) this.edgeGlow(c, '#ff2a40', (0.5 + 0.4 * Math.sin(now / 160)) * 0.6);
     // K.O. : rayons

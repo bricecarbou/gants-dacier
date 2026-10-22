@@ -6,6 +6,7 @@ export type Action =
   | 'dodgeBack'
   | 'super'
   | 'confirm' // simple appui hors commandes (menus)
+  | 'musicToggle' // activer / couper la musique
   | 'punchLeftHead'
   | 'punchLeftBody'
   | 'punchRightHead'
@@ -19,6 +20,7 @@ const KEY_MAP: Record<string, Action> = {
   ArrowRight: 'dodgeRight',
   ArrowDown: 'dodgeBack',
   Space: 'super',
+  KeyM: 'musicToggle',
   KeyW: 'punchLeftHead',
   KeyS: 'punchLeftBody',
   KeyI: 'punchRightHead',
@@ -84,6 +86,13 @@ export class Input {
       const g: Gesture = { x0: p.x, y0: p.y, t0: performance.now(), done: false, dir: null, btn: null, sw: false, power: 1 };
       this.gestures.set(e.pointerId, g);
 
+      // écran titre : bouton de la musique
+      const mu = CONFIG.input.musicButton;
+      if (this.inMenu && p.x >= mu.x && p.x <= mu.x + mu.w && p.y >= mu.y && p.y <= mu.y + mu.h) {
+        g.done = true;
+        this.push('musicToggle');
+        return;
+      }
       // écran titre : bouton de choix du mode
       const mb = CONFIG.input.modeButton;
       if (this.inMenu && p.x >= mb.x && p.x <= mb.x + mb.w && p.y >= mb.y && p.y <= mb.y + mb.h) {

@@ -273,12 +273,12 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    // garde au repos : gants à hauteur de poitrine, collés aux flancs, coudes rentrés
+    // garde au repos : coudes bas et sortis le long de la taille, avant-bras relevés, gants à hauteur d épaule près du cou
     const wob = pose.bob * s;
-    let gx = s * 16;
-    let gy = -19 - 1.2 * wob * calm;
-    let ex = s * 17;
-    let ey = -3;
+    let gx = s * 22;
+    let gy = -35 - 1.5 * wob * calm;
+    let ex = s * 29;
+    let ey = -9;
     const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {
       gx = lerp(gx, tgx, w);
       gy = lerp(gy, tgy, w);
@@ -291,7 +291,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     mixTo(pose.win, s * 20, -106, s * 25, -68); // victoire : les deux bras tendus, gants au-dessus de la tête
     mixTo(pose.down, s * 24, 14, s * 27, 2); // K.O. : accroupi, gants près du sol
     const gw = tx(gx, gy);
-    const guard = { x: gw[0], y: gw[1], r: 8.5 };
+    const guard = { x: gw[0], y: gw[1], r: 9.5 };
     let g = guard;
     const eg = tx(ex, ey);
     let el: Pt = eg;

@@ -58,7 +58,7 @@ export function skeleton(px: number, py: number, lean: number, tw: number) {
   const up = new Xf(base[0], base[1], lean, 1 - 0.14 * Math.abs(tw), 1);
   const shift = 9 * tw;
   // l'épaule qui avance (côté de la rotation) s'écarte un peu
-  const S: [Pt, Pt] = [up.p(-50 + shift - 3 * Math.max(0, -tw), -103), up.p(50 + shift + 3 * Math.max(0, tw), -103)];
+  const S: [Pt, Pt] = [up.p(-45 + shift - 3 * Math.max(0, -tw), -103), up.p(45 + shift + 3 * Math.max(0, tw), -103)];
   return { base, up, shift, S };
 }
 
@@ -116,9 +116,9 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
   const trail: OppPose['trail'] = [];
 
   // gants de garde, accrochés au buste (ils suivent son inclinaison)
-  let guardL: Pt = [-28, -118 + gb];
-  let guardR: Pt = [28, -118 - gb];
-  let gloveR = 15;
+  let guardL: Pt = [-21, -120 + gb];
+  let guardR: Pt = [21, -120 - gb];
+  let gloveR = 18;
   let elbow = 1;
   let gL: G | null = null;
   let gR: G | null = null;

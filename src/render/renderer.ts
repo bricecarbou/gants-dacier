@@ -4,9 +4,9 @@ import type { Game } from '../game/state';
 import { LOW_W, buildArenaLow } from './arenaPix';
 import { pixelText } from './font';
 import { Hud } from './hud';
-import { drawOpponent } from './oppDraw';
 import { type OppPose, computePose } from './oppPose';
 import { PL_FEET, playerState } from './plDraw';
+import { drawBrazePixel } from './oppRig';
 import { drawRigPixel, rigFromPose } from './plRig';
 import { LH, LS, LW } from './view';
 import { type Ctx, starPath } from './vec';
@@ -153,7 +153,7 @@ export class Renderer {
     }
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
-    const drawOpp = (t: Ctx) => this.withOpp(t, pose, () => drawOpponent(t, pose));
+    const drawOpp = (t: Ctx) => this.withOpp(t, pose, () => drawBrazePixel(t, pose, o, now));
     // fin de combat : victoire (bras levés) ou K.O. (accroupi) selon l'issue
     const endK = game.phase === 'koPause' ? 1 - game.phaseTimer / CONFIG.fight.koPauseMs : game.phase === 'result' ? 1 : 0;
     const won = game.outcome === 'ko-win' || game.outcome === 'points-win';

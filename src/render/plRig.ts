@@ -9,22 +9,22 @@ import { type Ctx, polyPath } from './vec';
 //
 // Repère du monde : x vers la droite de l'écran, y vers le haut, z vers l'adversaire (loin de nous). Unité : une tête.
 
-type V = [number, number, number];
+export type V = [number, number, number];
 type Pt = [number, number];
 
-const add = (a: V, b: V): V => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const mul = (a: V, k: number): V => [a[0] * k, a[1] * k, a[2] * k];
-const dot3 = (a: V, b: V): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const len3 = (a: V): number => Math.hypot(a[0], a[1], a[2]);
-const norm = (a: V): V => mul(a, 1 / (len3(a) || 1));
-const mix = (a: V, b: V, t: number): V => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const rotY = (p: V, a: number): V => [p[0] * Math.cos(a) + p[2] * Math.sin(a), p[1], -p[0] * Math.sin(a) + p[2] * Math.cos(a)];
-const rotX = (p: V, a: number): V => [p[0], p[1] * Math.cos(a) - p[2] * Math.sin(a), p[1] * Math.sin(a) + p[2] * Math.cos(a)];
-const rotZ = (p: V, a: number): V => [p[0] * Math.cos(a) - p[1] * Math.sin(a), p[0] * Math.sin(a) + p[1] * Math.cos(a), p[2]];
+export const add = (a: V, b: V): V => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+export const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const mul = (a: V, k: number): V => [a[0] * k, a[1] * k, a[2] * k];
+export const dot3 = (a: V, b: V): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const len3 = (a: V): number => Math.hypot(a[0], a[1], a[2]);
+export const norm = (a: V): V => mul(a, 1 / (len3(a) || 1));
+export const mix = (a: V, b: V, t: number): V => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+export const rotY = (p: V, a: number): V => [p[0] * Math.cos(a) + p[2] * Math.sin(a), p[1], -p[0] * Math.sin(a) + p[2] * Math.cos(a)];
+export const rotX = (p: V, a: number): V => [p[0], p[1] * Math.cos(a) - p[2] * Math.sin(a), p[1] * Math.sin(a) + p[2] * Math.cos(a)];
+export const rotZ = (p: V, a: number): V => [p[0] * Math.cos(a) - p[1] * Math.sin(a), p[0] * Math.sin(a) + p[1] * Math.cos(a), p[2]];
 
 // cinématique inverse à deux segments (épaule-coude-poignet, hanche-genou-cheville) ; `pole` indique où part le coude / le genou
-function ik2(root: V, target: V, l1: number, l2: number, pole: V): V {
+export function ik2(root: V, target: V, l1: number, l2: number, pole: V): V {
   let d = sub(target, root);
   let dist = len3(d);
   const max = l1 + l2 - 0.02;
@@ -105,9 +105,11 @@ const proj = (p: V): Pt => {
 interface Tone {
   base: string;
   shade: string;
+  light?: string; // reflet en haut à gauche
+  edge?: string; // contour propre à la matière (plus discret que le noir)
 }
 const TONE = {
-  skin: { base: '#eaa56b', shade: '#b8744a' },
+  skin: { base: '#eaa56b', shade: '#c2845a', light: '#f7c492', edge: '#8a5535' },
   hair: { base: '#14141f', shade: '#0a0a12' },
   tank: { base: '#1a1b2c', shade: '#10111c' },
   shorts: { base: '#2d6df2', shade: '#2358c4' },
@@ -162,21 +164,40 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
   // --- primitives ---
   const flat = (pts: Pt[], tone: Tone, shade = true): void => {
     const path = (dx = 0, dy = 0): void => polyPath(c, dx || dy ? pts.map((p): Pt => [p[0] + dx, p[1] + dy]) : pts);
+    const h = PX * 1.25;
     c.fillStyle = tone.base;
     path();
     c.fill();
     if (shade) {
+      // trois tons : reflet en haut à gauche, ombre en bas à droite, la couleur de base au milieu
       c.save();
       path();
       c.clip();
-      c.fillStyle = tone.shade;
-      c.fillRect(0, 0, 400, 600);
-      c.fillStyle = tone.base;
-      path(-PX * 0.9, -PX * 0.9);
-      c.fill();
+      if (tone.light) {
+        c.fillStyle = tone.light;
+        c.fillRect(-100, -100, 700, 800);
+        c.save();
+        path(h, h);
+        c.clip();
+        c.fillStyle = tone.shade;
+        c.fillRect(-100, -100, 700, 800);
+        c.save();
+        path(-h, -h);
+        c.clip();
+        c.fillStyle = tone.base;
+        c.fillRect(-100, -100, 700, 800);
+        c.restore();
+        c.restore();
+      } else {
+        c.fillStyle = tone.shade;
+        c.fillRect(-100, -100, 700, 800);
+        c.fillStyle = tone.base;
+        path(-h, -h);
+        c.fill();
+      }
       c.restore();
     }
-    c.strokeStyle = OUT;
+    c.strokeStyle = tone.edge ?? OUT;
     c.lineWidth = OUTW;
     path();
     c.stroke();
@@ -206,6 +227,16 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
 
   const parts: Part[] = [];
   const u = U;
+  const MUSC = '#b07040';
+  const muscle = (a: Pt, b: Pt, t0: number, t1: number, off: number): void => {
+    const nx = -(b[1] - a[1]);
+    const ny = b[0] - a[0];
+    const nl = Math.hypot(nx, ny) || 1;
+    const sg = nx + ny > 0 ? 1 : -1;
+    const ox = (sg * nx * off) / nl;
+    const oy = (sg * ny * off) / nl;
+    line([a[0] + (b[0] - a[0]) * t0 + ox, a[1] + (b[1] - a[1]) * t0 + oy], [a[0] + (b[0] - a[0]) * t1 + ox, a[1] + (b[1] - a[1]) * t1 + oy], MUSC);
+  };
 
   // jambes : cuisse (chair), genou, hautes bottes noires jusqu'à mi-mollet, pied
   const leg = (hip: V, knee: V, ankle: V, foot: V, out: number): void => {
@@ -217,6 +248,13 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
         const k = proj(knee);
         const a = proj(ankle);
         flat(capsule(h, k, 0.46 * u, 0.36 * u), TONE.skin);
+        const mid = proj(mix(hip, knee, 0.4));
+        flat(capsule(h, mid, 0.58 * u, 0.52 * u), TONE.shorts);
+        // ourlet : un trait sombre en travers du bas du manchon
+        const th = Math.atan2(mid[1] - h[1], mid[0] - h[0]);
+        const hx = Math.cos(th + Math.PI / 2) * 0.46 * u;
+        const hy = Math.sin(th + Math.PI / 2) * 0.46 * u;
+        line([mid[0] + hx * 0.1 - hx, mid[1] + hy * 0.1 - hy], [mid[0] + hx, mid[1] + hy], '#173a8a');
         const bootTop = proj(mix(ankle, knee, 0.5));
         flat(capsule(bootTop, a, 0.4 * u, 0.34 * u), TONE.boot);
         const f = proj(add(foot, [0, 0.05, 0]));
@@ -236,9 +274,9 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
       const top = 0.6;
       const wl = proj(add(P, Rp([-0.9, top, 0])));
       const wr = proj(add(P, Rp([0.9, top, 0])));
-      const bl = proj(add(P, Rp([-1.0, -1.25, 0])));
-      const br = proj(add(P, Rp([1.0, -1.25, 0])));
-      const mid = proj(add(P, Rp([0, -0.75, 0])));
+      const bl = proj(add(P, Rp([-0.95, -0.7, 0])));
+      const br = proj(add(P, Rp([0.95, -0.7, 0])));
+      const mid = proj(add(P, Rp([0, -0.5, 0])));
       flat([wl, wr, br, [br[0] - 0.5 * u * 0.4, br[1] + 0.2 * u * 0.4], mid, [bl[0] + 0.5 * u * 0.4, bl[1] + 0.2 * u * 0.4], bl], TONE.shorts);
       line(wl, bl, SOLE);
       line(wr, br, SOLE);
@@ -260,7 +298,13 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
     draw: () => {
       const p = (x: number, y: number): Pt => proj(add(C, Mc([x, y, 0])));
       flat([p(-1.3, 0.05), p(-0.4, 0.3), p(0.4, 0.3), p(1.3, 0.05), p(1.25, -1.0), p(-1.25, -1.0)], TONE.skin);
-      flat([p(-0.55, 0.3), p(0.55, 0.3), p(0.95, -0.7), p(0.9, -2.0), p(-0.9, -2.0), p(-0.95, -0.7)], TONE.tank);
+      flat([p(-0.5, 0.3), p(0.5, 0.3), p(0.98, -0.35), p(0.9, -1.1), p(0.74, -2.0), p(-0.74, -2.0), p(-0.9, -1.1), p(-0.98, -0.35)], TONE.tank);
+      const L = '#2e3050';
+      line(p(0, 0.15), p(0, -1.9), L);
+      line(p(-0.7, -0.45), p(-0.25, -0.7), L);
+      line(p(0.7, -0.45), p(0.25, -0.7), L);
+      line(p(-0.8, -1.25), p(-0.78, -1.9), L);
+      line(p(0.8, -1.25), p(0.78, -1.9), L);
     },
   });
 
@@ -280,6 +324,8 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
         TONE.hair,
       );
       flat([[h[0] + 0.25 * u, h[1] - 0.7 * u], [h[0] + 0.62 * u, h[1] - 1.0 * u], [h[0] + 0.8 * u, h[1] - 0.62 * u], [h[0] + 0.55 * u, h[1] - 0.5 * u]], TONE.hair, false);
+      flat([[h[0] - 0.4 * u, h[1] - 0.72 * u], [h[0] - 0.3 * u, h[1] - 1.05 * u], [h[0] - 0.05 * u, h[1] - 0.8 * u]], TONE.hair, false);
+      flat([[h[0] - 0.1 * u, h[1] - 0.78 * u], [h[0] + 0.05 * u, h[1] - 1.12 * u], [h[0] + 0.25 * u, h[1] - 0.76 * u]], TONE.hair, false);
     },
   });
 
@@ -292,6 +338,7 @@ function drawRig(c: Ctx, r: Rig, PX: number): void {
         const s = proj(sh);
         const e = proj(el);
         flat(capsule(s, e, 0.52 * u, 0.42 * u), TONE.skin);
+        muscle(s, e, 0.2, 0.75, 0.18 * u);
       },
     });
     parts.push({
@@ -332,7 +379,7 @@ const hex = (h: string): [number, number, number] => {
   const n = parseInt(h.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const PALETTE: [number, number, number][] = [...Object.values(TONE).flatMap((t) => [t.base, t.shade]), OUT, GOLD, SOLE].map(hex);
+const PALETTE: [number, number, number][] = [...Object.values(TONE as Record<string, { base: string; shade: string; light?: string; edge?: string }>).flatMap((t) => [t.base, t.shade, ...(t.light ? [t.light] : []), ...(t.edge ? [t.edge] : [])]), '#b07040', OUT, GOLD, SOLE].map(hex);
 
 let work: HTMLCanvasElement | null = null;
 
@@ -400,6 +447,14 @@ export function rigFromPose(p: PlPose): Rig {
   r.chestYaw += -d * 0.3;
   r.pelYaw += -d * 0.15;
   r.crouch += Math.abs(d) * 0.3;
+  if (d !== 0) {
+    // quand le buste plonge de côté, les poings restent près du menton au lieu de suivre l'inclinaison (sinon un bras
+    // monte en travers de la tête) : on annule l'essentiel de la rotation sur les mains
+    r.handL = rotZ(r.handL, -r.side * 0.85);
+    r.handR = rotZ(r.handR, -r.side * 0.85);
+    r.poleL = rotZ(r.poleL, -r.side * 0.85);
+    r.poleR = rotZ(r.poleR, -r.side * 0.85);
+  }
   r.footL = add(r.footL, [d * 0.45, 0, 0]);
   r.footR = add(r.footR, [d * 0.45, 0, 0]);
 
@@ -420,7 +475,7 @@ export function rigFromPose(p: PlPose): Rig {
     const k = p.k;
     const left = p.hand === 'left';
     const head = p.target === 'head';
-    const tgt: V = head ? (left ? [-0.35, 1.7, 2.3] : [0.3, 1.7, 2.3]) : left ? [-1.0, -0.5, 2.2] : [1.0, -0.6, 2.1];
+    const tgt: V = head ? (left ? [-1.15, 1.35, 2.2] : [1.15, 1.35, 2.2]) : left ? [-1.0, -0.5, 2.2] : [1.0, -0.6, 2.1];
     r.front = left ? 1 : 2;
     if (left) r.handL = mix(r.handL, tgt, k);
     else r.handR = mix(r.handR, tgt, k);

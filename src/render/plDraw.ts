@@ -11,11 +11,11 @@ import { type Ctx, LINE, capsulePath, dot, ellPath, mix, polyPath, smoothPath, s
 const CX = 144;
 export const PL_FEET = 424; // ligne des pieds à l'écran
 export const PL_JUMP_HEAD = 30; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher son visage)
-const HIP_H = 56; // hauteur du bassin au-dessus des pieds
+const HIP_H = 60; // hauteur du bassin au-dessus des pieds
 const N1 = 30; // segments du bras (constants)
 const N2 = 36;
-const LEG1 = 24;
-const LEG2 = 26;
+const LEG1 = 26;
+const LEG2 = 28;
 
 const SKIN = toonOf('#eaa56b');
 const HAIR = { base: '#101c2c', light: '#38c9e6', shade: '#060b14', line: LINE };
@@ -24,6 +24,7 @@ const GLOVE_B = toonOf('#2f86ff');
 const CUFF = toonOf('#f4efe2');
 const SHOE = toonOf('#2a2a46');
 const GOLD = '#ffc93c';
+const TANK = toonOf('#1b2036');
 
 export interface PlPose {
   d: number; // esquive latérale -1..1
@@ -183,7 +184,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const up = new Xf(base[0], base[1], lean, 1 - 0.12 * Math.abs(tw), 1);
   const shift = 5 * tw;
   const tx = (x: number, y: number): Pt => up.p(x + shift, y);
-  const S: [Pt, Pt] = [tx(-27 - 2 * Math.max(0, -tw), -25), tx(27 + 2 * Math.max(0, tw), -25)];
+  const S: [Pt, Pt] = [tx(-21 - 2 * Math.max(0, -tw), -25), tx(21 + 2 * Math.max(0, tw), -25)];
 
   // --- jambes : deux segments à longueur fixe, pieds posés (ils se replient quand il saute) ---
   const bobL = Math.max(0, pose.bob) * 3;
@@ -195,11 +196,11 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     if (hs !== 0 && pose.target === 'body' && s === hs) fl = Math.max(0, fl - 1);
     if (hs !== 0 && s === -hs) fl += 2 * k; // le pied arrière se lève un peu
     fx += hs !== 0 ? s * 2 * k : 0;
-    const hip: Pt = [base[0] + s * 10, base[1] + 4];
+    const hip: Pt = [base[0] + s * 8, base[1] + 4];
     const foot: Pt = [fx, PL_FEET - fl];
     const ankle: Pt = [fx, foot[1] - 4];
     const knee = ik(hip, ankle, LEG1, LEG2, s, 0.1);
-    toonGroup(c, [() => capsulePath(c, hip, knee, 6.9, 5.9), () => capsulePath(c, knee, ankle, 5.5, 4.5)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
+    toonGroup(c, [() => capsulePath(c, hip, knee, 6, 5.2), () => capsulePath(c, knee, ankle, 4.8, 4)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
     toonGroup(c, [() => ellPath(c, null, fx, foot[1] - 1, 9.8, 5)], SHOE, { lw: 1.9, shade: 4, hi: 2.4 });
     stroke(c, [[fx - 7, foot[1] + 2.4], [fx + 7, foot[1] + 2.4]], '#f4efe2', 1.3, 0.9);
     stroke(c, [[fx - 5, foot[1] - 2.5], [fx + 5, foot[1] - 2.5]], '#38c9e6', 1.2, 0.8);
@@ -207,27 +208,31 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
 
   // --- short bleu à ceinture dorée ---
   const pel = new Xf(base[0], base[1], lean * 0.4, 1, 1);
-  toon(c, () => smoothPath(c, pel.pts([[-21, -3], [21, -3], [24, 20], [9, 27], [0, 19], [-9, 27], [-24, 20]])), SHORTS, { lw: 2, shade: 5, hi: 3 });
+  toon(c, () => smoothPath(c, pel.pts([[-17, -3], [17, -3], [20, 20], [8, 27], [0, 19], [-8, 27], [-20, 20]])), SHORTS, { lw: 2, shade: 5, hi: 3 });
   c.save();
   c.fillStyle = GOLD;
-  polyPath(c, pel.pts([[-21, -3], [21, -3], [21, 1.5], [-21, 1.5]]));
+  polyPath(c, pel.pts([[-17, -3], [17, -3], [17, 1.5], [-17, 1.5]]));
   c.fill();
   c.restore();
   stroke(c, [pel.p(0, 1), pel.p(0, 19)], mix(SHORTS.base, '#0a1a4a', 0.55), 1.5, 0.8);
-  stroke(c, [pel.p(-22, 8), pel.p(-21.5, 22)], '#ffffff', 2.2, 0.8);
-  stroke(c, [pel.p(22, 8), pel.p(21.5, 22)], '#ffffff', 2.2, 0.8);
+  stroke(c, [pel.p(-18, 8), pel.p(-17.5, 22)], '#ffffff', 2.2, 0.8);
+  stroke(c, [pel.p(18, 8), pel.p(17.5, 22)], '#ffffff', 2.2, 0.8);
 
   // --- dos : trapèzes, omoplates, colonne ---
   const back: Pt[] = [
-    tx(-6, -31), tx(6, -31), tx(16, -29), tx(27, -25), tx(26, -14), tx(21, -4), tx(18, 4), tx(-18, 4), tx(-21, -4), tx(-26, -14), tx(-27, -25), tx(-16, -29),
+    tx(-5, -31), tx(5, -31), tx(12, -29), tx(21, -25), tx(20, -14), tx(15, -4), tx(13, 4), tx(-13, 4), tx(-15, -4), tx(-20, -14), tx(-21, -25), tx(-12, -29),
   ];
   const t0 = tx(0, -31);
   const t1 = tx(0, 4);
   toon(c, () => smoothPath(c, back), SKIN, { lw: 2.1, shade: 6, hi: 4, grad: [t0[0] - 25, t0[1], t1[0] + 25, t1[1]] });
-  for (const s of [-1, 1] as const) toon(c, () => ellPath(c, up, s * 27 + shift, -24, 8, 9), SKIN, { lw: 1.9, shade: 4, hi: 3 });
+  for (const s of [-1, 1] as const) toon(c, () => ellPath(c, up, s * 21 + shift, -24, 6.6, 7.6), SKIN, { lw: 1.9, shade: 4, hi: 3 });
   const DARK = mix(SKIN.base, '#3a1648', 0.55);
   stroke(c, [tx(0, -30), tx(0, 4)], DARK, 1.4, 0.75);
-  for (const s of [-1, 1] as const) stroke(c, [tx(s * 5, -22), tx(s * 15, -17), tx(s * 10, -8)], DARK, 1.4, 0.6);
+  for (const s of [-1, 1] as const) stroke(c, [tx(s * 4, -22), tx(s * 11, -17), tx(s * 8, -8)], DARK, 1.4, 0.6);
+
+  // --- débardeur sombre : bretelles sur les épaules, dos échancré, liseré cyan ---
+  toon(c, () => smoothPath(c, [tx(-12, -29), tx(-5, -28), tx(0, -17), tx(5, -28), tx(12, -29), tx(15, -22), tx(15, -4), tx(13, 3), tx(-13, 3), tx(-15, -4), tx(-15, -22)]), TANK, { lw: 1.9, shade: 4, hi: 2 });
+  stroke(c, [tx(-13, 1), tx(13, 1)], '#38c9e6', 1.6, 0.9);
 
   // --- cou + tête de dos : cheveux courts à épis, bandeau doré, mèches néon ---
   const nk = tx(0, -31);
@@ -261,13 +266,13 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    let gw = tx(s * (25 - 8 * cv + 15 * fl - 6 * clutch), lerp(-43 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
+    let gw = tx(s * (24 - 8 * cv + 15 * fl - 6 * clutch), lerp(-43 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
     if (pose.win > 0) gw = tx(s * (34 + 0 * pose.win), lerp(-50, -104, pose.win)); // gants levés bien haut
     if (pose.down > 0) gw = tx(s * lerp(21, 34, pose.down), lerp(-50, 26, pose.down)); // gants qui traînent au sol
     const guard = { x: gw[0], y: gw[1], r: 11 };
     let g = guard;
     // coude de garde : vu de dos, le bras plié part vers l'avant, donc il paraît court (perspective) — on le place à la main
-    let eg = tx(s * (31 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
+    let eg = tx(s * (27 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
     if (pose.win > 0) eg = tx(s * lerp(31, 44, pose.win), lerp(-8, -62, pose.win));
     if (pose.down > 0) eg = tx(s * lerp(31, 36, pose.down), lerp(-8, 12, pose.down));
     let el: Pt = eg;

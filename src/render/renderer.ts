@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import type { Input } from '../game/input';
 import type { Game } from '../game/state';
-import { LOW_H, LOW_W, buildArenaLow } from './arenaPix';
+import { LOW_W, buildArenaLow } from './arenaPix';
 import { pixelText } from './font';
 import { Hud } from './hud';
 import { drawOpponent } from './oppDraw';
@@ -52,12 +52,12 @@ export class Renderer {
   constructor(private canvas: HTMLCanvasElement) {
     this.c = canvas.getContext('2d')!;
     this.low = document.createElement('canvas');
-    this.low.width = LOW_W;
-    this.low.height = LOW_H;
+    this.low.width = LW;
+    this.low.height = LH;
     this.lc = this.low.getContext('2d')!;
     this.tmp = document.createElement('canvas');
-    this.tmp.width = LOW_W;
-    this.tmp.height = LOW_H;
+    this.tmp.width = LW;
+    this.tmp.height = LH;
     this.tc = this.tmp.getContext('2d')!;
     const a = buildArenaLow();
     this.arena = a.canvas;
@@ -87,8 +87,8 @@ export class Renderer {
   private tinted(c: Ctx, draw: (t: Ctx) => void, color: string, alpha: number, glow = 0): void {
     const t = this.tc;
     t.setTransform(1, 0, 0, 1, 0, 0);
-    t.clearRect(0, 0, LOW_W, LOW_H);
-    t.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    t.clearRect(0, 0, LW, LH);
+    t.setTransform(1, 0, 0, 1, 0, 0);
     t.imageSmoothingEnabled = true;
     draw(t);
     t.globalCompositeOperation = 'source-atop';
@@ -117,7 +117,7 @@ export class Renderer {
     const dt = Math.min(100, this.last ? now - this.last : 16);
     this.last = now;
     const w = this.lc;
-    w.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    w.setTransform(1, 0, 0, 1, 0, 0);
     w.save();
     if (game.shakeT > 0) {
       const m = game.shakeMag * LS * Math.min(1, game.shakeT / 200);

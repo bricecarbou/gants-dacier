@@ -110,11 +110,13 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
 
   // --- corps : bassin, inclinaison, rotation du buste ---
   let py = 0;
-  let lean = pose.d * 0.3;
+  let lean = pose.d * 0.4;
   let tw = pose.d * 0.95;
   let hx = 0;
   let hy = 0;
-  let tilt = 0;
+  let tilt = pose.d * 0.16;
+  py += 4 * Math.abs(pose.d);
+  hx += pose.d * 3;
   py += 7 * pose.cover;
   hy += 3 * pose.cover;
   const calm = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
@@ -283,11 +285,11 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
       ex = lerp(ex, tex, w);
       ey = lerp(ey, tey, w);
     };
-    mixTo(cv, s * 8, -58, s * 19, -14); // parade : les deux gants devant le visage
-    mixTo(fl, s * 38, -42, s * 34, -20); // coup au visage : bras projetés sur les côtés
+    mixTo(cv, s * 14, -56, s * 27, -26); // parade : les gants montent contre la tête, coudes écartés
+    mixTo(fl, s * 25, -10, s * 23, -4); // coup au visage : les bras retombent le long du corps
     mixTo(clutch, s * 10, -16, s * 22, -4); // coup au corps : les gants au ventre
-    mixTo(pose.win, s * 31, -100, s * 35, -64); // victoire : les gants en l'air
-    mixTo(pose.down, s * 31, 20, s * 31, 6); // K.O. : les gants pendent
+    mixTo(pose.win, s * 20, -106, s * 25, -68); // victoire : les deux bras tendus, gants au-dessus de la tête
+    mixTo(pose.down, s * 24, 14, s * 27, 2); // K.O. : accroupi, gants près du sol
     const gw = tx(gx, gy);
     const guard = { x: gw[0], y: gw[1], r: 10 };
     let g = guard;
@@ -309,7 +311,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     } else if (pose.hand === hand) {
       // visage : bras tendu vers le haut (Nova bondit) ; corps : bras plus plié, vers l'avant
       const tip: Pt = pose.target === 'head' ? [sh[0] - s * 10, sh[1] - arm] : [sh[0] - s * 7, sh[1] - 38];
-      const dest = { x: tip[0], y: tip[1], r: 14 };
+      const dest = { x: tip[0], y: tip[1], r: 12 };
       g = { x: lerp(guard.x, dest.x, k), y: lerp(guard.y, dest.y, k), r: lerp(guard.r, dest.r, k) };
       kk = k;
       if (k > 0.25)

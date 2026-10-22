@@ -81,7 +81,7 @@ export function playerState(pl: Player, now: number, mood: Mood = { win: 0, down
     hurt: hurtK,
     hk: hurtK > 0 && pl.lastHit ? hitKindOf(pl.lastHit.kind) : '',
     hsd: pl.lastHit && pl.lastHit.side === 'left' ? -1 : 1,
-    bob: Math.sin(now / 190),
+    bob: Math.sin(now / 130), // deux images qui alternent : appui gauche / appui droit
     air: a && a.target === 'head' ? k : sa ? supK : hurtK > 0 && pl.lastHit?.kind === 'uppercut' ? hurtK : 0,
     win: mood.win,
     down: mood.down,
@@ -119,10 +119,11 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   hx += pose.d * 3;
   py += 7 * pose.cover;
   hy += 3 * pose.cover;
+  const bq = Math.max(-1, Math.min(1, pose.bob * 3));
   const calm = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
   py += calm * (0.5 + 1.5 * Math.abs(pose.bob)); // en garde, il est légèrement fléchi et rebondit sur ses appuis
-  tw += calm * 0.1 * pose.bob;
-  tilt += calm * -0.03 * pose.bob;
+  tw += calm * 0.16 * bq;
+  tilt += calm * -0.04 * bq;
   hy += calm * 1.2 * Math.abs(pose.bob);
   const hh = pose.hurt;
   const hside = pose.hsd;
@@ -194,8 +195,8 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const S: [Pt, Pt] = [tx(-21 - 2 * Math.max(0, -tw), -25), tx(21 + 2 * Math.max(0, tw), -25)];
 
   // --- jambes : deux segments à longueur fixe, pieds posés (ils se replient quand il saute) ---
-  const bobL = Math.max(0, pose.bob) * 3;
-  const bobR = Math.max(0, -pose.bob) * 3;
+  const bobL = Math.max(0, bq) * 4;
+  const bobR = Math.max(0, -bq) * 4;
   for (const s of [-1, 1] as const) {
     const spread = 8 + Math.abs(pose.d) * 6 + 6 * pose.cover + 14 * pose.down + 3 * pose.win + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
     let fx = CX + s * spread + pose.d * 9;
@@ -274,9 +275,9 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
     // garde au repos : coudes bas et sortis le long de la taille, avant-bras relevés, gants à hauteur d épaule près du cou
-    const wob = pose.bob * s;
-    let gx = s * 22;
-    let gy = -35 - 1.5 * wob * calm;
+    const wob = bq * s;
+    let gx = s * (22 - 1.5 * wob * calm);
+    let gy = -35 - 5 * wob * calm; // un gant monte pendant que l'autre descend
     let ex = s * 29;
     let ey = -9;
     const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {

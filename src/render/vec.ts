@@ -111,26 +111,14 @@ export function toonGroup(c: Ctx, paths: PathFn[], t: Toon, o: { lw?: number; sh
   for (const p of paths) {
     c.save();
     p();
-    if (o.grad) {
-      const g = c.createLinearGradient(o.grad[0], o.grad[1], o.grad[2], o.grad[3]);
-      g.addColorStop(0, mix(t.base, t.light, 0.55));
-      g.addColorStop(0.5, t.base);
-      g.addColorStop(1, mix(t.base, t.shade, 0.55));
-      c.fillStyle = g;
-    } else c.fillStyle = t.base;
+    c.fillStyle = t.base; // aplat : pas de dégradé, comme un sprite de console
     c.fill();
     c.clip();
     c.translate(-1.8, -1.8);
     p();
     c.strokeStyle = t.shade;
-    c.lineWidth = o.shade ?? 6.5;
-    c.globalAlpha = 0.72;
-    c.stroke();
-    c.translate(3.6, 3.6);
-    p();
-    c.strokeStyle = t.light;
-    c.lineWidth = o.hi ?? 4;
-    c.globalAlpha = 0.7;
+    c.lineWidth = (o.shade ?? 6.5) * 0.85;
+    c.globalAlpha = 0.85;
     c.stroke();
     c.restore();
   }

@@ -43,29 +43,9 @@ export function drawGlove(c: Ctx, g: G, from: Pt, thumb: 1 | -1, tone: typeof GL
   const t1 = L(0.8, thumb * 0.92);
   toonGroup(c, [() => smoothPath(c, body), () => capsulePath(c, t0, t1, r * 0.34, r * 0.3)], tone, { lw: 2.4, shade: Math.max(4, r * 0.5), hi: Math.max(3, r * 0.3) });
 
-  // coutures et plis : pli des phalanges, séparation du pouce, trois doigts
+  // un seul pli des phalanges et la séparation du pouce (style sprite : peu de détails)
   stroke(c, [L(0.34, -1.0), L(0.55, 0), L(0.32, 0.98)], SEAM, Math.max(1.2, r * 0.085), 0.9);
-  if (!small) {
-    stroke(c, [L(-0.02, thumb * 0.62), L(0.4, thumb * 0.68), L(0.78, thumb * 0.6)], SEAM, Math.max(1, r * 0.06), 0.7);
-    stroke(c, [L(0.8, -0.66), L(1.14, -0.6)], SEAM, Math.max(1, r * 0.055), 0.6);
-    stroke(c, [L(0.86, -0.2), L(1.2, -0.14)], SEAM, Math.max(1, r * 0.055), 0.6);
-    stroke(c, [L(0.8, 0.26), L(1.12, 0.32)], SEAM, Math.max(1, r * 0.055), 0.6);
-    // petites coutures pointillées le long du bord
-    c.save();
-    c.setLineDash([Math.max(1.6, r * 0.12), Math.max(1.6, r * 0.12)]);
-    stroke(c, [L(-0.55, -0.76), L(-0.1, -0.88), L(0.3, -0.94)], mix(tone.base, '#ffffff', 0.5), Math.max(0.9, r * 0.045), 0.7);
-    c.restore();
-  }
-  // reflet brillant (la lumière vient du haut gauche)
-  c.save();
-  c.globalAlpha = 0.9;
-  c.fillStyle = '#ffffff';
-  c.translate(g.x - r * 0.3, g.y - r * 0.5);
-  c.rotate(-0.45);
-  c.beginPath();
-  c.ellipse(0, 0, Math.max(1.6, r * 0.34), Math.max(1, r * 0.13), 0, 0, Math.PI * 2);
-  c.fill();
-  c.restore();
+  if (!small) stroke(c, [L(-0.02, thumb * 0.62), L(0.4, thumb * 0.68), L(0.78, thumb * 0.6)], SEAM, Math.max(1, r * 0.06), 0.7);
 }
 
 function ghostGlove(c: Ctx, g: G, alpha: number): void {
@@ -147,7 +127,7 @@ export function drawOpponent(c: Ctx, pose: OppPose): void {
 
   // ---- cou + tête ----
   const nk = up.p(shift, -132);
-  const hd = new Xf(nk[0] + pose.hx, nk[1] + pose.hy, pose.lean + pose.tilt);
+  const hd = new Xf(nk[0] + pose.hx, nk[1] + pose.hy, pose.lean + pose.tilt, 0.86, 0.86);
   const hp = (rx: number, ry: number): Pt => hd.p(rx, ry - 26); // coordonnées relatives au centre de la tête
   toon(c, () => polyPath(c, hd.pts([[-10, 8], [10, 8], [12, -6], [-12, -6]])), SKIN, { lw: 2.4 });
   for (const s of [-1, 1] as const) toon(c, () => ellPath(c, hd, s * 23.5, -24, 4.2, 7.2), SKIN, { lw: 2.2 });
@@ -159,11 +139,6 @@ export function drawOpponent(c: Ctx, pose: OppPose): void {
   for (const [x, y] of [[22, 2], [21, 18], [16, 28], [8, 34], [-8, 34], [-16, 28], [-21, 18], [-22, 2]]) headPts.push(hp(x, y));
   const hc = hp(0, 0);
   toon(c, () => smoothPath(c, headPts), SKIN, { lw: 2.6, shade: 8, hi: 5, grad: [hc[0] - 20, hc[1] - 24, hc[0] + 20, hc[1] + 34] });
-  // pommettes rosées
-  for (const s of [-1, 1] as const) {
-    const p = hp(s * 15, 15);
-    dot(c, p[0], p[1], 4.2, '#ff8f7a', 0.28);
-  }
   drawFace(c, pose, hp);
   // sueur
   if (pose.expr === 'dazed' || pose.expr === 'hurt' || pose.expr === 'ko') {
@@ -183,7 +158,7 @@ export function drawOpponent(c: Ctx, pose: OppPose): void {
     }
   }
   // cheveux en pointes, qui suivent le mouvement avec un léger retard
-  const hairXf = new Xf(hd.x, hd.y, hd.a + pose.hair);
+  const hairXf = new Xf(hd.x, hd.y, hd.a + pose.hair, 0.86, 0.86);
   const hh = (rx: number, ry: number): Pt => hairXf.p(rx, ry - 26);
   const hairPts: Pt[] = [
     hh(-24, 0), hh(-25, -17), hh(-19, -14), hh(-23, -35), hh(-12, -28), hh(-13, -46), hh(-5, -34), hh(-1, -54), hh(4, -36), hh(11, -49),
@@ -219,9 +194,6 @@ function drawFace(c: Ctx, pose: OppPose, hp: (rx: number, ry: number) => Pt): vo
   c.save();
   c.lineCap = 'round';
   c.lineJoin = 'round';
-  // cicatrice
-  stroke(c, [hp(-18, 11), hp(-11, 19)], '#a8343c', 1.8, 0.9);
-  stroke(c, [hp(-12, 11), hp(-17, 19)], '#a8343c', 1.8, 0.9);
   // nez
   stroke(c, [hp(1.5, 7), hp(3.5, 12), hp(-1.5, 13.5)], mix(SKIN.base, '#3a1648', 0.6), 1.8, 0.9);
   for (const s of [-1, 1] as const) {
@@ -255,7 +227,6 @@ function drawFace(c: Ctx, pose: OppPose, hp: (rx: number, ry: number) => Pt): vo
       } else {
         dot(c, ec[0] + s * 0.3, ec[1] + 0.3, Math.min(ry, 3) * 0.95 + 0.6, IRIS);
         dot(c, ec[0] + s * 0.3, ec[1] + 0.3, Math.min(ry, 3) * 0.5, INK);
-        dot(c, ec[0] - 1, ec[1] - 1.2, 0.9, '#ffffff');
       }
     }
     // sourcil

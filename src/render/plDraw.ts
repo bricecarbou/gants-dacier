@@ -243,7 +243,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
 
   // --- cou + tête de dos : cheveux courts à épis, bandeau doré, mèches néon ---
   const nk = tx(0, -31);
-  const hd = new Xf(nk[0] + hx, nk[1] + hy, lean + tilt);
+  const hd = new Xf(nk[0] + hx, nk[1] + hy, lean + tilt, 0.9, 0.9);
   const hp = (rx: number, ry: number): Pt => hd.p(rx, ry - 15);
   toon(c, () => polyPath(c, hd.pts([[-4.5, 3], [4.5, 3], [5.5, -5], [-5.5, -5]])), SKIN, { lw: 1.8 });
   for (const s of [-1, 1] as const) toon(c, () => ellPath(c, hd, s * 12.5, -14, 2.4, 3.8), SKIN, { lw: 1.6 });

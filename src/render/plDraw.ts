@@ -122,8 +122,9 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const bq = Math.max(-1, Math.min(1, pose.bob * 3));
   const calm = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
   py += calm * (0.5 + 1.5 * Math.abs(pose.bob)); // en garde, il est légèrement fléchi et rebondit sur ses appuis
-  tw += calm * 0.16 * bq;
-  tilt += calm * -0.04 * bq;
+  tw += calm * (0.9 + 0.12 * bq); // de trois quarts, avec un léger balancement
+  tilt += calm * (0.05 - 0.03 * bq);
+  lean += calm * 0.06;
   hy += calm * 1.2 * Math.abs(pose.bob);
   const hh = pose.hurt;
   const hside = pose.hsd;
@@ -195,8 +196,9 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const S: [Pt, Pt] = [tx(-21 - 2 * Math.max(0, -tw), -25), tx(21 + 2 * Math.max(0, tw), -25)];
 
   // --- jambes : deux segments à longueur fixe, pieds posés (ils se replient quand il saute) ---
-  const bobL = Math.max(0, bq) * 4;
-  const bobR = Math.max(0, -bq) * 4;
+  const calmLeg = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
+  const bobL = Math.max(0, bq) * 3;
+  const bobR = Math.max(0, -bq) * 3 + 4 * calmLeg; // pied arrière : talon levé, genou plié
   for (const s of [-1, 1] as const) {
     const spread = 8 + Math.abs(pose.d) * 6 + 6 * pose.cover + 14 * pose.down + 3 * pose.win + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
     let fx = CX + s * spread + pose.d * 9;
@@ -276,8 +278,8 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
     // garde au repos : coudes bas et sortis le long de la taille, avant-bras relevés, gants à hauteur d épaule près du cou
     const wob = bq * s;
-    let gx = s * (22 - 1.5 * wob * calm);
-    let gy = -35 - 5 * wob * calm; // un gant monte pendant que l'autre descend
+    let gx = s * (21 - 1.2 * wob * calm);
+    let gy = -33 - 3.5 * wob * calm; // un gant monte pendant que l'autre descend
     let ex = s * 29;
     let ey = -9;
     const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {
@@ -292,7 +294,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     mixTo(pose.win, s * 20, -106, s * 25, -68); // victoire : les deux bras tendus, gants au-dessus de la tête
     mixTo(pose.down, s * 24, 14, s * 27, 2); // K.O. : accroupi, gants près du sol
     const gw = tx(gx, gy);
-    const guard = { x: gw[0], y: gw[1], r: 9.5 };
+    const guard = { x: gw[0], y: gw[1], r: lerp(9.5, 6.2, calm) }; // au repos les gants se voient à peine
     let g = guard;
     const eg = tx(ex, ey);
     let el: Pt = eg;
@@ -334,7 +336,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
       c.fill();
       c.restore();
     }
-    toonGroup(c, [() => capsulePath(c, sh, el, 6, 4.9), () => capsulePath(c, el, [g.x, g.y], 4.9, 4.2), () => ellPath(c, null, el[0], el[1], 5.6, 5.6)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
+    toonGroup(c, [() => capsulePath(c, sh, el, 7, 5.8), () => capsulePath(c, el, [g.x, g.y], 5.6, 4.8), () => ellPath(c, null, el[0], el[1], 5.8, 5.8)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
     drawGlove(c, g, el, s === -1 ? 1 : -1, GLOVE_B, CUFF);
   }
   void dot;

@@ -261,10 +261,10 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    let gw = tx(s * (21 - 8 * cv + 15 * fl - 6 * clutch), lerp(-50 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
+    let gw = tx(s * (25 - 8 * cv + 15 * fl - 6 * clutch), lerp(-43 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
     if (pose.win > 0) gw = tx(s * (34 + 0 * pose.win), lerp(-50, -104, pose.win)); // gants levés bien haut
     if (pose.down > 0) gw = tx(s * lerp(21, 34, pose.down), lerp(-50, 26, pose.down)); // gants qui traînent au sol
-    const guard = { x: gw[0], y: gw[1], r: 9.5 };
+    const guard = { x: gw[0], y: gw[1], r: 11 };
     let g = guard;
     // coude de garde : vu de dos, le bras plié part vers l'avant, donc il paraît court (perspective) — on le place à la main
     let eg = tx(s * (31 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);

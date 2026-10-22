@@ -117,6 +117,11 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   let tilt = 0;
   py += 7 * pose.cover;
   hy += 3 * pose.cover;
+  const calm = pose.hand === '' && pose.sup < 0 && pose.hurt === 0 && pose.win === 0 && pose.down === 0 ? 1 - pose.cover : 0;
+  py += calm * (4 + 3 * Math.abs(pose.bob)); // en garde, il est légèrement fléchi et rebondit sur ses appuis
+  tw += calm * 0.1 * pose.bob;
+  tilt += calm * -0.03 * pose.bob;
+  hy += calm * 1.2 * Math.abs(pose.bob);
   const hh = pose.hurt;
   const hside = pose.hsd;
   if (hh > 0) {
@@ -266,15 +271,27 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    let gw = tx(s * (24 - 8 * cv + 15 * fl - 6 * clutch), lerp(-43 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
-    if (pose.win > 0) gw = tx(s * (34 + 0 * pose.win), lerp(-50, -104, pose.win)); // gants levés bien haut
-    if (pose.down > 0) gw = tx(s * lerp(21, 34, pose.down), lerp(-50, 26, pose.down)); // gants qui traînent au sol
-    const guard = { x: gw[0], y: gw[1], r: 11 };
+    // garde de boxeur vue de dos : avant-bras presque verticaux, gants à hauteur d'oreille juste à l'extérieur de la tête, coudes rentrés
+    const wob = pose.bob * s;
+    let gx = s * 23;
+    let gy = -52 - 1.6 * wob * calm;
+    let ex = s * 27;
+    let ey = -12;
+    const mixTo = (w: number, tgx: number, tgy: number, tex: number, tey: number): void => {
+      gx = lerp(gx, tgx, w);
+      gy = lerp(gy, tgy, w);
+      ex = lerp(ex, tex, w);
+      ey = lerp(ey, tey, w);
+    };
+    mixTo(cv, s * 8, -58, s * 19, -14); // parade : les deux gants devant le visage
+    mixTo(fl, s * 38, -42, s * 34, -20); // coup au visage : bras projetés sur les côtés
+    mixTo(clutch, s * 10, -16, s * 22, -4); // coup au corps : les gants au ventre
+    mixTo(pose.win, s * 31, -100, s * 35, -64); // victoire : les gants en l'air
+    mixTo(pose.down, s * 31, 20, s * 31, 6); // K.O. : les gants pendent
+    const gw = tx(gx, gy);
+    const guard = { x: gw[0], y: gw[1], r: 12 };
     let g = guard;
-    // coude de garde : vu de dos, le bras plié part vers l'avant, donc il paraît court (perspective) — on le place à la main
-    let eg = tx(s * (27 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
-    if (pose.win > 0) eg = tx(s * lerp(31, 44, pose.win), lerp(-8, -62, pose.win));
-    if (pose.down > 0) eg = tx(s * lerp(31, 36, pose.down), lerp(-8, 12, pose.down));
+    const eg = tx(ex, ey);
     let el: Pt = eg;
     let kk = 0;
     const ghosts: { x: number; y: number; r: number }[] = [];

@@ -11,7 +11,7 @@ import { type Ctx, LINE, capsulePath, dot, ellPath, mix, polyPath, smoothPath, s
 const CX = 144;
 export const PL_FEET = 424; // ligne des pieds à l'écran
 export const PL_JUMP_HEAD = 30; // hauteur du saut pour viser le visage (assez bas pour ne pas cacher son visage)
-const HIP_H = 60; // hauteur du bassin au-dessus des pieds
+const HIP_H = 62; // hauteur du bassin au-dessus des pieds
 const N1 = 30; // segments du bras (constants)
 const N2 = 36;
 const LEG1 = 26;
@@ -291,7 +291,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     mixTo(pose.win, s * 20, -106, s * 25, -68); // victoire : les deux bras tendus, gants au-dessus de la tête
     mixTo(pose.down, s * 24, 14, s * 27, 2); // K.O. : accroupi, gants près du sol
     const gw = tx(gx, gy);
-    const guard = { x: gw[0], y: gw[1], r: 10 };
+    const guard = { x: gw[0], y: gw[1], r: 8.5 };
     let g = guard;
     const eg = tx(ex, ey);
     let el: Pt = eg;
@@ -311,7 +311,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     } else if (pose.hand === hand) {
       // visage : bras tendu vers le haut (Nova bondit) ; corps : bras plus plié, vers l'avant
       const tip: Pt = pose.target === 'head' ? [sh[0] - s * 10, sh[1] - arm] : [sh[0] - s * 7, sh[1] - 38];
-      const dest = { x: tip[0], y: tip[1], r: 12 };
+      const dest = { x: tip[0], y: tip[1], r: 10 };
       g = { x: lerp(guard.x, dest.x, k), y: lerp(guard.y, dest.y, k), r: lerp(guard.r, dest.r, k) };
       kk = k;
       if (k > 0.25)
@@ -333,7 +333,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
       c.fill();
       c.restore();
     }
-    toonGroup(c, [() => capsulePath(c, sh, el, 7.2, 5.9), () => capsulePath(c, el, [g.x, g.y], 5.9, 5.1), () => ellPath(c, null, el[0], el[1], 5.6, 5.6)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
+    toonGroup(c, [() => capsulePath(c, sh, el, 6, 4.9), () => capsulePath(c, el, [g.x, g.y], 4.9, 4.2), () => ellPath(c, null, el[0], el[1], 5.6, 5.6)], SKIN, { lw: 1.9, shade: 4, hi: 2.6 });
     drawGlove(c, g, el, s === -1 ? 1 : -1, GLOVE_B, CUFF);
   }
   void dot;

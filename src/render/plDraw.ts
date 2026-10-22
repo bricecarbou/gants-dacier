@@ -37,6 +37,8 @@ export interface PlPose {
   hsd: -1 | 1; // de quel côté
   bob: number; // -1..1 : appui qui alterne
   air: number; // 0..1 : il décolle (jambes repliées)
+  win: number; // 0..1 : victoire, les bras en l'air, petits sauts
+  down: number; // 0..1 : K.O., accroupi la tête pendante
 }
 
 export interface PlState {
@@ -54,7 +56,13 @@ function hitKindOf(kind: string): PlPose['hk'] {
   return 'direct';
 }
 
-export function playerState(pl: Player, now: number): PlState {
+// Humeur de fin de combat : victoire (bras levés) ou K.O. (à terre), avec son avancement 0..1.
+export interface Mood {
+  win: number;
+  down: number;
+}
+
+export function playerState(pl: Player, now: number, mood: Mood = { win: 0, down: 0 }): PlState {
   const a = pl.punchAnim;
   const u = a ? clamp01(a.t / CONFIG.player.punchAnimMs) : 0;
   // le gant part vite, reste un instant sur la cible, puis revient
@@ -74,7 +82,10 @@ export function playerState(pl: Player, now: number): PlState {
     hsd: pl.lastHit && pl.lastHit.side === 'left' ? -1 : 1,
     bob: Math.sin(now / 190),
     air: a && a.target === 'head' ? k : sa ? supK : hurtK > 0 && pl.lastHit?.kind === 'uppercut' ? hurtK : 0,
+    win: mood.win,
+    down: mood.down,
   };
+  if (mood.win > 0) pose.air = Math.abs(Math.sin(now / 170)) * 0.7 * mood.win; // petits sauts de joie
   const shake = pl.stun > 0 ? (Math.floor(now / 40) % 2 ? 4 : -4) : 0; // Nova encaisse : il est secoué
   const sway = 2 * Math.sin(now / 480); // léger balancement de garde
   const lift = a
@@ -84,7 +95,8 @@ export function playerState(pl: Player, now: number): PlState {
       : hurtK > 0 && pl.lastHit?.kind === 'uppercut'
         ? 14 * hurtK
         : 0;
-  return { pose, x: pl.dodgeOffset * 0.8 + sway + shake, y: -lift, jump: lift };
+  const hop = mood.win > 0 ? Math.abs(Math.sin(now / 170)) * 14 * mood.win : 0;
+  return { pose, x: pl.dodgeOffset * 0.8 + sway + shake, y: -lift - hop, jump: lift + hop };
 }
 
 export function drawPlayer(c: Ctx, pose: PlPose): void {
@@ -133,6 +145,19 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
       lean += -0.06 * hh;
     }
   }
+  if (pose.down > 0) {
+    // K.O. : il s'écroule, accroupi, la tête qui pend, le buste penché sur le côté
+    py += 36 * pose.down;
+    hy += 22 * pose.down;
+    tilt += 0.32 * pose.down;
+    lean += 0.18 * pose.down;
+    tw += 0.4 * pose.down;
+  }
+  if (pose.win > 0) {
+    // victoire : le buste se redresse, la tête se lève
+    hy -= 3 * pose.win;
+    tilt -= 0.06 * pose.win;
+  }
   if (supering) {
     lean += 0.1 * k;
     tw += 0.7 * k;
@@ -161,7 +186,7 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
   const bobL = Math.max(0, pose.bob) * 3;
   const bobR = Math.max(0, -pose.bob) * 3;
   for (const s of [-1, 1] as const) {
-    const spread = 15 + Math.abs(pose.d) * 6 + 6 * pose.cover + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
+    const spread = 15 + Math.abs(pose.d) * 6 + 6 * pose.cover + 14 * pose.down + 3 * pose.win + (pose.target === 'body' && hs !== 0 ? 4 * k : 0);
     let fx = CX + s * spread + pose.d * 9;
     let fl = (s === -1 ? bobL : bobR) + pose.air * 18;
     if (hs !== 0 && pose.target === 'body' && s === hs) fl = Math.max(0, fl - 1);
@@ -233,11 +258,15 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     const cv = pose.cover;
     const fl = pose.hurt > 0 && pose.hk !== 'body' ? pose.hurt : 0; // bras projetés
     const clutch = pose.hurt > 0 && pose.hk === 'body' ? pose.hurt : 0; // mains sur le ventre
-    const gw = tx(s * (21 - 8 * cv + 15 * fl - 6 * clutch), lerp(-50 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
+    let gw = tx(s * (21 - 8 * cv + 15 * fl - 6 * clutch), lerp(-50 - 1 * pose.bob + 6 * cv + 9 * fl, -20, clutch));
+    if (pose.win > 0) gw = tx(s * (34 + 0 * pose.win), lerp(-50, -104, pose.win)); // gants levés bien haut
+    if (pose.down > 0) gw = tx(s * lerp(21, 34, pose.down), lerp(-50, 26, pose.down)); // gants qui traînent au sol
     const guard = { x: gw[0], y: gw[1], r: 9.5 };
     let g = guard;
     // coude de garde : vu de dos, le bras plié part vers l'avant, donc il paraît court (perspective) — on le place à la main
-    const eg = tx(s * (31 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
+    let eg = tx(s * (31 + 2 * cv + 8 * fl), -8 + 5 * cv - 2 * pose.hurt - 6 * fl);
+    if (pose.win > 0) eg = tx(s * lerp(31, 44, pose.win), lerp(-8, -62, pose.win));
+    if (pose.down > 0) eg = tx(s * lerp(31, 36, pose.down), lerp(-8, 12, pose.down));
     let el: Pt = eg;
     let kk = 0;
     const ghosts: { x: number; y: number; r: number }[] = [];

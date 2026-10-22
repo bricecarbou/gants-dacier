@@ -146,7 +146,11 @@ export class Renderer {
 
     const flashOpp = o.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
     const drawOpp = (t: Ctx) => this.withOpp(t, pose, () => drawOpponent(t, pose));
-    const ps = playerState(game.player, now);
+    // fin de combat : victoire (bras levés) ou K.O. (accroupi) selon l'issue
+    const endK = game.phase === 'koPause' ? 1 - game.phaseTimer / CONFIG.fight.koPauseMs : game.phase === 'result' ? 1 : 0;
+    const won = game.outcome === 'ko-win' || game.outcome === 'points-win';
+    const lost = game.outcome === 'ko-loss';
+    const ps = playerState(game.player, now, { win: won ? Math.min(1, endK * 2.5) : 0, down: lost ? Math.min(1, endK * 2.5) : 0 });
     const plFlash = game.player.hitFlash > 0 && Math.floor(now / 55) % 2 === 0;
     const drawPl = (t: Ctx) => {
       t.save();

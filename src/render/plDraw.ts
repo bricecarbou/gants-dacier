@@ -91,7 +91,7 @@ export function playerState(pl: Player, now: number, mood: Mood = { win: 0, down
   const lift = a
     ? (a.target === 'head' ? PL_JUMP_HEAD : 0) * k
     : sa
-      ? PL_JUMP_HEAD * 0.8 * supK
+      ? PL_JUMP_HEAD * 0.8 * Math.max(0, (supK - 0.4) / 0.6)
       : hurtK > 0 && pl.lastHit?.kind === 'uppercut'
         ? 14 * hurtK
         : 0;
@@ -109,8 +109,8 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
 
   // --- corps : bassin, inclinaison, rotation du buste ---
   let py = 0;
-  let lean = pose.d * 0.26;
-  let tw = pose.d * 0.7;
+  let lean = pose.d * 0.3;
+  let tw = pose.d * 0.95;
   let hx = 0;
   let hy = 0;
   let tilt = 0;
@@ -158,10 +158,13 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     hy -= 3 * pose.win;
     tilt -= 0.06 * pose.win;
   }
+  const arm1 = supering ? Math.min(1, k / 0.4) : 0; // armement : accroupi, bras en arrière
+  const arm2 = supering ? Math.max(0, (k - 0.4) / 0.6) : 0; // détente : il se redresse et frappe
   if (supering) {
-    lean += 0.1 * k;
-    tw += 0.7 * k;
-    py -= 3 * k;
+    lean += -0.14 * arm1 * (1 - arm2) + 0.18 * arm2;
+    tw += -0.55 * arm1 * (1 - arm2) + 0.95 * arm2;
+    py += 16 * arm1 * (1 - arm2) - 6 * arm2;
+    hy += 6 * arm1 * (1 - arm2) - 4 * arm2;
   } else if (hs !== 0) {
     if (pose.target === 'head') {
       lean += hs * 0.12 * k;
@@ -271,14 +274,15 @@ export function drawPlayer(c: Ctx, pose: PlPose): void {
     let kk = 0;
     const ghosts: { x: number; y: number; r: number }[] = [];
     if (supering && hand === 'right') {
-      const lowP = tx(22, -6);
+      const lowP = tx(30, 10); // poing armé bas et en arrière
       const low = { x: lowP[0], y: lowP[1], r: 9.5 };
       const top = { x: sh[0] - 7, y: sh[1] - arm, r: 24 };
-      g = { x: lerp(low.x, top.x, k), y: lerp(low.y, top.y, k), r: lerp(low.r, top.r, k) };
-      kk = k;
+      const e2 = 1 - Math.pow(1 - arm2, 3);
+      g = { x: lerp(low.x, top.x, e2), y: lerp(low.y, top.y, e2), r: lerp(low.r, top.r, e2) };
+      kk = e2;
       for (const d of [0.25, 0.5]) {
-        const kd = Math.max(0, k - d);
-        ghosts.push({ x: lerp(low.x, top.x, kd), y: lerp(low.y, top.y, kd), r: lerp(low.r, top.r, kd) });
+        const kd = Math.max(0, e2 - d);
+        if (e2 > 0.2) ghosts.push({ x: lerp(low.x, top.x, kd), y: lerp(low.y, top.y, kd), r: lerp(low.r, top.r, kd) });
       }
     } else if (pose.hand === hand) {
       // visage : bras tendu vers le haut (Nova bondit) ; corps : bras plus plié, vers l'avant

@@ -49,35 +49,74 @@ export class Hud {
     for (let i = 1; i < 10; i++) c.fillRect(x + Math.round((w * i) / 10), y, 2, h);
   }
 
+  // Petite icône en pixels (chaque case = 2 x 2 unités).
+  private icon(c: Ctx, rows: string[], x: number, y: number, color: string, edge = INK): void {
+    rows.forEach((row, j) => {
+      for (let i = 0; i < row.length; i++) {
+        if (row[i] === '1') {
+          c.fillStyle = edge;
+          c.fillRect(x + i * 2 - 1, y + j * 2 - 1, 4, 4);
+        }
+      }
+    });
+    rows.forEach((row, j) => {
+      for (let i = 0; i < row.length; i++) {
+        if (row[i] === '1') {
+          c.fillStyle = color;
+          c.fillRect(x + i * 2, y + j * 2, 2, 2);
+        }
+      }
+    });
+  }
+
+  // Case sombre à liseré clair, comme les cases d'informations d'un jeu de console.
+  private cell(c: Ctx, x: number, y: number, w: number, h: number): void {
+    c.fillStyle = INK;
+    c.fillRect(x - 2, y - 2, w + 4, h + 4);
+    c.fillStyle = '#2fd0a0';
+    c.fillRect(x, y, w, h);
+    c.fillStyle = '#0c1438';
+    c.fillRect(x + 2, y + 2, w - 4, h - 4);
+  }
+
   drawFight(c: Ctx, g: Game, dt: number): void {
     const follow = 1 - Math.pow(0.0015, dt / 1000);
     this.oppTrail = g.opponent.hpRatio >= this.oppTrail ? g.opponent.hpRatio : lerp(this.oppTrail, g.opponent.hpRatio, follow * 0.6);
     this.plTrail = g.player.hpRatio >= this.plTrail ? g.player.hpRatio : lerp(this.plTrail, g.player.hpRatio, follow * 0.6);
 
-    // bandeau compact en haut : nom + barre de vie à gauche, round et chrono à droite
-    c.fillStyle = '#0c1030';
-    c.fillRect(0, 0, 288, 34);
-    c.fillStyle = '#ffd23f';
-    c.fillRect(0, 34, 288, 2);
-    pixelText(c, 'BRAZE', 8, 5, { size: 8, color: '#ffd23f', outline: null });
-    this.bar(c, 8, 18, 160, 9, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
+    // bandeau du haut : mur quadrillé, puis les cases d'informations (étoile, cœur, barres de vie, chrono)
+    c.fillStyle = '#9fc4f5';
+    c.fillRect(0, 0, LW, 46);
+    c.fillStyle = '#7aa6e6';
+    for (let x = 0; x < LW; x += 12) c.fillRect(x, 0, 2, 46);
+    for (let y = 8; y < 46; y += 12) c.fillRect(0, y, LW, 2);
+    c.fillStyle = INK;
+    c.fillRect(0, 46, LW, 2);
+
+    // étoile = super prêt, cœur = nombre de coups que l'endurance permet encore
+    const punches = Math.floor(g.player.stamina / CONFIG.player.punchCost);
+    this.cell(c, 6, 6, 94, 34);
+    const STAR = ['...1...', '...1...', '1111111', '.11111.', '..111..', '.11.11.', '.1...1.'];
+    const HEART = ['.11.11.', '1111111', '1111111', '.11111.', '..111..', '...1...'];
+    const superOn = g.player.meterFull;
+    this.icon(c, STAR, 14, 15, superOn && Math.floor(Date.now() / 160) % 2 ? '#ffffff' : '#ffd23f');
+    pixelText(c, superOn ? '1' : '0', 34, 15, { size: 16, color: '#ffffff', outline: null });
+    this.icon(c, HEART, 56, 17, '#ff3b4e');
+    pixelText(c, String(punches), 76, 15, { size: 16, color: punches <= 2 ? '#ff5468' : '#ffffff', outline: null });
+
+    // barres de vie : adversaire en haut, joueur en dessous
+    this.cell(c, 108, 6, 96, 34);
+    pixelText(c, 'BRAZE', 112, 9, { size: 8, color: '#ffd23f', outline: null });
+    this.bar(c, 154, 9, 46, 9, g.opponent.hpRatio, this.oppTrail, g.opponent.hitFlash > 120);
+    pixelText(c, 'NOVA', 112, 25, { size: 8, color: '#7df9ff', outline: null });
+    this.bar(c, 154, 25, 46, 9, g.player.hpRatio, this.plTrail, g.player.hitFlash > 120);
+
+    // chrono et round
     const secs = Math.max(0, Math.ceil(g.roundTimer / 1000));
     const shown = g.phase === 'break' ? g.round - 1 : g.round;
-    pixelText(c, `ROUND ${shown}`, 280, 5, { size: 8, color: '#ffd23f', outline: null }, 'right');
-    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 280, 16,{ size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff', outline: null }, 'right');
-
-    pixelText(c, 'NOVA', 10, 466, { size: 16, color: '#7df9ff' });
-    this.bar(c, 10, 490, 108, 11, g.player.hpRatio, this.plTrail, g.player.hitFlash > 120);
-    pixelText(c, 'ENDURANCE', 278, 472, { size: 8, color: '#ffd23f', outline: null }, 'right');
-    const pips = Math.floor(CONFIG.player.maxStamina / CONFIG.player.punchCost);
-    const pw = Math.floor((108 - (pips - 1) * 2) / pips);
-    for (let i = 0; i < pips; i++) {
-      const fill = clamp01(g.player.stamina / CONFIG.player.punchCost - i);
-      const px = 170 + i * (pw + 2);
-      box(c, px, 490, pw, 11, '#2a2040');
-      c.fillStyle = fill >= 1 ? '#ffd23f' : '#ff8a3d';
-      c.fillRect(px, 490 + 11 - Math.round(11 * fill), pw, Math.round(11 * fill));
-    }
+    this.cell(c, 212, 6, 70, 34);
+    pixelText(c, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, 247, 10, { size: 16, color: secs <= 10 ? '#ff5468' : '#ffffff', outline: null }, 'center');
+    pixelText(c, `ROUND ${shown}`, 247, 29, { size: 8, color: '#ffd23f', outline: null }, 'center');
   }
 
   floatingTexts(c: Ctx, g: Game): void {

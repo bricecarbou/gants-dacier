@@ -11,9 +11,9 @@ import { LH, LS, LW } from './view';
 import { type Ctx, mix, starPath } from './vec';
 
 const CX = LW / 2;
-const OPP_K = 0.76; // l'adversaire est tracé à 76 % de sa taille (environ 40 % de la hauteur de l'écran)
-const OPP_PIVOT = 372; // ligne des pieds : point fixe de la mise à l'échelle
-const PL_K = 1.2; // Nova est un peu plus grand : proportions de combat de console (environ 1/4 de l'écran)
+const OPP_K = 0.86; // l'adversaire est tracé à 86 % de sa taille (environ 45 % de la hauteur de l'écran)
+const OPP_PIVOT = 392; // ligne des pieds : point fixe de la mise à l'échelle
+const PL_K = 1.25; // Nova est grand : proportions de combat de console (environ 28 % de l'écran)
 
 // Passe un point du sprite de l'adversaire à l'écran (élan autour du bassin, puis échelle autour des pieds).
 function oppPt(pose: { dx: number; dy: number; sc: number }, x: number, y: number): [number, number] {
@@ -128,7 +128,7 @@ export class Renderer {
     // la foule saute quand ça chauffe (contre, super, K.O.)
     if (game.cheerT > 0) {
       const jump = even(Math.abs(Math.sin(now / 90)) * -6 * Math.min(1, game.cheerT / 500));
-      w.drawImage(this.arena, 0, 26, LOW_W, 100, 0, 52 + jump, LW, 200);
+      w.drawImage(this.arena, 0, 22, LOW_W, 50, 0, 44 + jump, LW, 100);
     }
     w.imageSmoothingEnabled = true;
     this.crowdFlashes(w, now);
@@ -167,7 +167,7 @@ export class Renderer {
       if (flashOpp) this.tinted(w, drawOpp, '#ffffff', 1);
       else drawOpp(w);
       // signal d'esquive : la silhouette clignote dans la couleur du coup pendant les derniers instants avant l'impact
-      if (cue && Math.floor(now / 70) % 2 === 0) this.tinted(w, drawOpp, sigColor, 0.45, 14);
+      if (cue && Math.floor(now / 70) % 2 === 0) this.tinted(w, drawOpp, sigColor, 0.5);
     };
     const paintPl = () => {
       if (game.phase === 'menu') return;
@@ -270,7 +270,7 @@ export class Renderer {
     c.fillStyle = '#ffffff';
     for (let i = 0; i < 10; i++) {
       const x = even(16 + r() * (LW - 32));
-      const y = even(80 + r() * 150);
+      const y = even(52 + r() * 80);
       const ph = r() * 6000;
       const t = ((now + ph) % 4200) / 4200;
       if (t < 0.04) {

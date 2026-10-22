@@ -20,9 +20,18 @@ export class Opponent extends Fighter {
   stepPhase = 0;
   feintT = 0; // feinte en cours (ms restantes) : il lance le bras sans frapper
   feintSide: -1 | 1 = 1;
+  feint2 = false; // double feinte : le deuxième bras part juste après le premier
+  // provocation (il baisse la garde pour narguer) : ouvert, on est récompensé de le punir
+  tauntT = 0; // ms restantes
+  tauntDur = 1;
+  tauntKind: 'beckon' | 'shimmy' | 'pat' = 'beckon';
+  taunted = false; // le dernier coup reçu a puni une provocation
+  mode: 'weave' | 'shuffle' | 'rush' | 'circle' = 'weave'; // style de déplacement du moment
   private tx = 0;
   private tz = 0;
   private moveT = 0;
+  private modeT = 0;
+  private shufDir: -1 | 1 = 1;
   private recoilSet = false;
   // réaction au dernier coup reçu (pour l'animation) : quel coup, de quel côté, durée de la réaction
   hitInfo: { kind: 'head' | 'body' | 'counter' | 'super'; side: -1 | 1; dur: number } = { kind: 'head', side: 1, dur: 220 };
@@ -43,7 +52,7 @@ export class Opponent extends Fighter {
 
   // Vulnérable seulement après son attaque ; sinon sa garde absorbe les coups.
   get vulnerable(): boolean {
-    return this.state === 'recovery' || this.state === 'hit';
+    return this.state === 'recovery' || this.state === 'hit' || (this.state === 'idle' && this.tauntT > 0);
   }
 
   // Frapper juste avant l'impact = contre (interrompt le coup).
@@ -65,6 +74,11 @@ export class Opponent extends Fighter {
     this.pattern = null;
     this.ripostingFlag = false;
     this.idleScale = Math.pow(O.idleScalePerRound, round - 1);
+    this.tauntT = 0;
+    this.feintT = 0;
+    this.feint2 = false;
+    this.mode = 'weave';
+    this.modeT = 0;
     this.timer = this.nextIdle() + 400;
   }
 
@@ -92,19 +106,65 @@ export class Opponent extends Fighter {
   // Jeu de jambes : cibles de position selon ce qu'il fait, puis déplacement amorti.
   private footwork(dt: number, focusX: number): void {
     const clampX = (v: number) => Math.max(-34, Math.min(34, v));
+    const prevFeint = this.feintT;
     this.feintT = Math.max(0, this.feintT - dt);
+    if (this.state !== 'idle') this.tauntT = 0;
     if (this.state === 'idle') {
       this.recoilSet = false;
-      this.moveT -= dt;
-      if (this.moveT <= 0) {
-        // nouveau déplacement : il se place un peu autour du joueur, plus ou moins près
-        this.moveT = 700 + Math.random() * 900;
-        this.tx = clampX(focusX * 0.5 + (Math.random() - 0.5) * 60);
-        this.tz = [-0.7, 0, 0.5, 0.9][Math.floor(Math.random() * 4)];
+      this.tauntT = Math.max(0, this.tauntT - dt);
+      if (prevFeint > 0 && this.feintT === 0 && this.feint2 && this.timer > 450) {
+        // double feinte : l'autre bras enchaîne tout de suite
+        this.feint2 = false;
+        this.feintT = 340;
+        this.feintSide = this.feintSide === 1 ? -1 : 1;
       }
-      if (this.feintT <= 0 && this.timer > 800 && Math.random() < dt / 2400) {
-        this.feintT = 380;
-        this.feintSide = Math.random() < 0.5 ? -1 : 1;
+      if (this.tauntT > 0) {
+        // il nargue le joueur : il s'approche, sur place
+        this.tx = clampX(focusX * 0.3);
+        this.tz = 0.5;
+      } else {
+        this.modeT -= dt;
+        if (this.modeT <= 0) {
+          // nouveau style de jeu de jambes : balancé, petits pas rapides (shuffle), tour du joueur, ou fonce puis recule
+          const r = Math.random();
+          this.mode = r < 0.3 ? 'weave' : r < 0.55 ? 'shuffle' : r < 0.8 ? 'circle' : 'rush';
+          this.modeT = 1000 + Math.random() * 1200;
+          this.moveT = 0;
+          this.shufDir = Math.random() < 0.5 ? -1 : 1;
+        }
+        this.moveT -= dt;
+        if (this.moveT <= 0) {
+          if (this.mode === 'shuffle') {
+            this.moveT = 240 + Math.random() * 60;
+            this.shufDir = this.shufDir === 1 ? -1 : 1;
+            this.tx = clampX(focusX * 0.3 + this.shufDir * 22);
+            this.tz = 0.3;
+          } else if (this.mode === 'circle') {
+            this.moveT = 800 + Math.random() * 300;
+            this.shufDir = this.shufDir === 1 ? -1 : 1;
+            this.tx = clampX(this.shufDir * 30);
+            this.tz = 0.1;
+          } else if (this.mode === 'rush') {
+            this.moveT = 520;
+            this.tx = clampX(focusX * 0.5);
+            this.tz = this.tz < 0.8 ? 1 : -0.7; // fonce, puis se dégage
+          } else {
+            // nouveau déplacement : il se place un peu autour du joueur, plus ou moins près
+            this.moveT = 700 + Math.random() * 900;
+            this.tx = clampX(focusX * 0.5 + (Math.random() - 0.5) * 60);
+            this.tz = [-0.7, 0, 0.5, 0.9][Math.floor(Math.random() * 4)];
+          }
+        }
+        if (this.feintT <= 0 && this.timer > 800 && Math.random() < dt / 2000) {
+          this.feintT = 340;
+          this.feintSide = Math.random() < 0.5 ? -1 : 1;
+          this.feint2 = Math.random() < 0.4;
+        } else if (this.feintT <= 0 && this.timer > 1500 && Math.random() < dt / 6000) {
+          // provocation : il baisse la garde pour narguer (et s'expose)
+          this.tauntDur = 900 + Math.random() * 300;
+          this.tauntT = this.tauntDur;
+          this.tauntKind = (['beckon', 'shimmy', 'pat'] as const)[Math.floor(Math.random() * 3)];
+        }
       }
     } else if (this.state === 'telegraph') {
       this.tz = 1; // il s'approche pour frapper
@@ -190,6 +250,7 @@ export class Opponent extends Fighter {
   // Il bloque, puis contre avec un direct à télégraphie courte : on peut l'esquiver comme n'importe quel direct.
   riposte(side: 'left' | 'right', damage: number, telegraphMs: number): void {
     const base = PATTERNS.find((p) => p.kind === 'direct' && p.side === side) ?? PATTERNS[0];
+    this.tauntT = 0;
     this.pattern = { ...base, telegraphMs, recoveryMs: 700, damage };
     this.state = 'telegraph';
     this.timer = telegraphMs;
@@ -198,12 +259,18 @@ export class Opponent extends Fighter {
 
   receiveHit(dmg: number): 'blocked' | 'hit' | 'ko' {
     if (!this.vulnerable) return 'blocked';
-    this.damage(dmg);
+    const punished = this.state === 'idle'; // provocation punie
+    this.taunted = punished;
+    this.damage(punished ? Math.round(dmg * 1.6) : dmg);
     if (this.hp <= 0) {
       this.state = 'ko';
       return 'ko';
     }
-    if (this.state === 'recovery') {
+    if (punished) {
+      this.tauntT = 0;
+      this.saved = 600;
+      this.state = 'hit';
+    } else if (this.state === 'recovery') {
       this.saved = this.timer;
       this.state = 'hit';
     }

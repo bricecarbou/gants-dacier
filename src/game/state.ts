@@ -327,11 +327,15 @@ export class Game {
     if (counter) pl.counterT = 0;
     this.audio.play('hit');
     this.impact(counter ? 'counter' : 'hit', x, y, counter ? 'CONTRE !' : HIT_WORDS[Math.floor(Math.random() * HIT_WORDS.length)]);
-    this.award(counter ? 300 : 100);
+    this.award(counter ? 300 : o.taunted ? 250 : 100);
+    if (o.taunted) {
+      this.say('PROVOC PUNIE !', 180, 230, '#ffe14d');
+      this.cheerT = 700;
+    }
     this.bump();
     this.shake(counter ? 160 : 90, counter ? 4 : 2);
     this.hitStop = counter ? H.counter : H.hit;
-    this.say(`-${dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, counter ? '#7df9ff' : '#ffffff');
+    this.say(`-${o.taunted ? Math.round(dmg * 1.6) : dmg}`, x + (hand === 'left' ? -40 : 40), y - 30, counter ? '#7df9ff' : '#ffffff');
     if (r === 'ko') this.endByKo('ko-win');
   }
 

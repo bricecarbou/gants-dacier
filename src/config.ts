@@ -19,7 +19,7 @@ export const CONFIG = {
     musicButton: { x: 296, y: 8, w: 54, h: 44 }, // musique activée / coupée (écran titre)
   },
   player: {
-    maxHp: 100,
+    maxHp: 130,
     maxStamina: 100,
     punchCost: 14,
     staminaRegenPerSec: 22,
@@ -53,21 +53,21 @@ export const CONFIG = {
     staggerMs: 1700, // temps d'ouverture de l'adversaire après le super
   },
   opponent: {
-    maxHp: 100,
+    maxHp: 200,
     hitStunMs: 220,
     cueMs: 650, // le signal d'esquive (clignotement) démarre ce temps avant l'impact : esquiver à ce moment protège jusqu'au coup
     idleMs: { min: 950, max: 1550 },
-    idleScalePerRound: 0.85, // l'adversaire s'enchaîne plus vite à chaque round
+    idleScalePerRound: 0.9, // l'adversaire s'enchaîne plus vite à chaque round
     // ids des coups (voir patterns.ts) : ordre apprenable
     sequence: ['jab-droit', 'direct-gauche', 'crochet-gauche', 'direct-droit', 'un-deux', 'foie-droit', 'jab-gauche', 'crochet-droit', 'marteau-gauche', 'remontant', 'direct-droit', 'foie-gauche', 'marteau-droit', 'direct-gauche'],
     variationChance: 0.15, // proba de remplacer le pattern prévu par un autre
   },
   fight: {
-    rounds: 3,
-    roundDurationMs: 45000,
+    rounds: 4,
+    roundDurationMs: 60000,
     introMs: 1600,
     breakMs: 3000,
-    breakHpRecoverPct: 0.15,
+    breakHpRecoverPct: 0.25,
     koPauseMs: 1800,
     resultDelayMs: 700,
     drawThreshold: 0.02, // écart de vie (ratio) sous lequel c'est une égalité

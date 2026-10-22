@@ -221,6 +221,45 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
     guardR = [44, -40];
     elbow = -0.4;
     feetOut = 10;
+  } else if (o.state === 'idle' && o.tauntT > 0 && !guardUp) {
+    // provocation : il baisse la garde pour narguer le joueur (c'est le moment de le punir)
+    const tt = 1 - o.tauntT / o.tauntDur;
+    const env = Math.sin(Math.PI * clamp01(tt)) ** 0.5; // entre et sort de la pose en douceur
+    const w = tt * Math.PI * 2;
+    expr = o.tauntKind === 'pat' ? 'calm' : 'shout';
+    elbow = -0.4;
+    if (o.tauntKind === 'beckon') {
+      // « viens ! » : un gant tendu qui fait signe, l'autre pend, la tête penchée en arrière
+      lean = -0.1 * env;
+      tilt = 0.14 * env;
+      hy = -2 * env;
+      py = 4 * env;
+      tw = 0.2 * env;
+      guardL = [-32, -58];
+      guardR = [34, -92];
+      gR = { x: CX + 58, y: 238 + 10 * Math.sin(w * 3) * env, r: 18 };
+      front = 1;
+    } else if (o.tauntKind === 'shimmy') {
+      // il se déhanche, les bras ballants, en sautillant
+      guardL = [-38, -52];
+      guardR = [38, -52];
+      tw = 0.55 * Math.sin(w * 5) * env;
+      px = 6 * Math.sin(w * 5) * env;
+      py = 5 * Math.abs(Math.sin(w * 5)) * env;
+      lean = 0.05 * Math.sin(w * 5) * env;
+      tilt = -0.1 * Math.sin(w * 5) * env;
+      ll = 6 * Math.max(0, Math.sin(w * 5)) * env;
+      lr = 6 * Math.max(0, -Math.sin(w * 5)) * env;
+    } else {
+      // il se tape les gants l'un contre l'autre devant la poitrine, la tête qui hoche
+      const t2 = 0.5 + 0.5 * Math.sin(w * 4);
+      guardL = [-8 - 14 * t2, -98];
+      guardR = [8 + 14 * t2, -98];
+      hy = 3 * Math.abs(Math.sin(w * 4)) * env;
+      py = 5 * env;
+      lean = 0.05 * env;
+      gloveR = 18;
+    }
   } else if ((o.state === 'telegraph' || o.state === 'attack') && p) {
     front = s;
     glow = kind === 'uppercut' ? [0, 1] : [ai];
@@ -420,6 +459,14 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
     ll = Math.max(ll, 9 * Math.max(0, sp));
     lr = Math.max(lr, 9 * Math.max(0, -sp));
     feetOut += 2;
+    if (o.state === 'idle' && o.tauntT <= 0) {
+      // il rebondit sur ses appuis, les épaules et la tête suivent le pas
+      const hop = Math.abs(sp);
+      py -= (o.mode === 'shuffle' ? 4 : 2.5) * hop;
+      tw += 0.14 * sp;
+      hy -= 1.5 * hop;
+      tilt += 0.03 * sp;
+    }
   }
 
   // jambes : genoux pliés quand il se prépare
@@ -483,6 +530,48 @@ export function computePose(o: Opponent, now: number, guardUp: boolean): { pose:
     sc,
     sh: 0,
   };
-  return { pose, tp, ap };
+  return { pose: smoothPose(pose, o.state, now), tp, ap };
+}
+
+// Lissage temporel : les poses se rejoignent en douceur (surtout au repos), la frappe reste franche pour que le signal soit net.
+const SMOOTH_TAU: Record<string, number> = { attack: 0, hit: 18, telegraph: 40, ko: 45, recovery: 70, idle: 90 };
+let prevPose: OppPose | null = null;
+let prevNow = 0;
+function smoothPose(p: OppPose, state: string, now: number): OppPose {
+  const dt = now - prevNow;
+  const tau = SMOOTH_TAU[state] ?? 60;
+  if (prevPose && dt <= 0) return p;
+  if (!prevPose || dt > 250 || tau === 0) {
+    prevPose = p;
+    prevNow = now;
+    return p;
+  }
+  const k = 1 - Math.exp(-dt / tau);
+  const q = prevPose;
+  const m = (a: number, b: number): number => a + (b - a) * k;
+  const mg = (a: G, b: G): G => ({ x: m(a.x, b.x), y: m(a.y, b.y), r: m(a.r, b.r) });
+  const mp = (a: Pt, b: Pt): Pt => [m(a[0], b[0]), m(a[1], b[1])];
+  const out: OppPose = {
+    ...p,
+    px: m(q.px, p.px),
+    py: m(q.py, p.py),
+    lean: m(q.lean, p.lean),
+    tw: m(q.tw, p.tw),
+    hx: m(q.hx, p.hx),
+    hy: m(q.hy, p.hy),
+    tilt: m(q.tilt, p.tilt),
+    gl: mg(q.gl, p.gl),
+    gr: mg(q.gr, p.gr),
+    fl: mp(q.fl, p.fl),
+    fr: mp(q.fr, p.fr),
+    head: mp(q.head, p.head),
+    dx: m(q.dx, p.dx),
+    dy: m(q.dy, p.dy),
+    sc: m(q.sc, p.sc),
+    elbow: m(q.elbow, p.elbow),
+  };
+  prevPose = out;
+  prevNow = now;
+  return out;
 }
 
